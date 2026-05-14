@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #111827;
+  background: #f4f7f9;
+  font-synthesis: none;
+  text-rendering: geometricPrecision;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: #f4f7f9;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.stock-app {
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+.stock-app.dark-mode {
+  background:
+    radial-gradient(circle at top right, rgba(15, 138, 138, 0.14), transparent 34rem),
+    #0a1118 !important;
+  color: #e6edf3 !important;
+}
+
+.stock-app.dark-mode aside,
+.stock-app.dark-mode section,
+.stock-app.dark-mode article,
+.stock-app.dark-mode form,
+.stock-app.dark-mode a,
+.stock-app.dark-mode [class*="bg-white"] {
+  background-color: #101923 !important;
+  border-color: #263645 !important;
+  color: #e6edf3 !important;
+}
+
+.stock-app.dark-mode [class*="bg-[#fbfcfd]"],
+.stock-app.dark-mode [class*="bg-[#f6faf8]"],
+.stock-app.dark-mode [class*="bg-[#f3fbf8]"],
+.stock-app.dark-mode [class*="bg-slate-100"],
+.stock-app.dark-mode [class*="bg-red-50"] {
+  background-color: #152230 !important;
+}
+
+.stock-app.dark-mode [class*="text-muted"],
+.stock-app.dark-mode [class*="text-slate-"],
+.stock-app.dark-mode [class*="text-[#0f172a]"],
+.stock-app.dark-mode [class*="text-[#213234]"] {
+  color: #9fb0c2 !important;
+}
+
+.stock-app.dark-mode h1,
+.stock-app.dark-mode h2,
+.stock-app.dark-mode h3,
+.stock-app.dark-mode p,
+.stock-app.dark-mode strong,
+.stock-app.dark-mode label {
+  color: inherit;
+}
+
+.stock-app.dark-mode input {
+  color: #e6edf3 !important;
+}
+
+.stock-app.dark-mode input::placeholder {
+  color: #788da3 !important;
+}
+
+.stock-app.dark-mode .theme-toggle {
+  background-color: #183344 !important;
+  border-color: #2a5266 !important;
+  color: #7dd3fc !important;
+}
+
+.stock-app.dark-mode svg line {
+  stroke: #263645;
+}
+
+.stock-app.dark-mode .shadow-sm,
+.stock-app.dark-mode [class*="shadow-"] {
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24) !important;
+}
