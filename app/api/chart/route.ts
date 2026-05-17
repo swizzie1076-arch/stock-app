@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getChart } from "@/lib/market-data";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const symbol = searchParams.get("symbol")?.trim().toUpperCase();
@@ -13,9 +15,17 @@ export async function GET(request: Request) {
   try {
     return NextResponse.json(await getChart(symbol, range));
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Could not fetch chart data." },
-      { status: 502 }
-    );
+    return NextResponse.json({
+      symbol,
+      companyName: symbol,
+      exchange: "Alpha Vantage",
+      currency: "USD",
+      price: 0,
+      change: 0,
+      changePercent: 0,
+      range,
+      points: [],
+      error: error instanceof Error ? error.message : "Could not fetch chart data."
+    });
   }
 }

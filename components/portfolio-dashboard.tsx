@@ -49,10 +49,11 @@ type Holding = {
 
 type Quote = {
   symbol: string;
-  price: number;
+  price: number | null;
   change: number;
   changePercent: string;
   latestTradingDay: string | null;
+  error?: string;
 };
 
 type QuoteState = {
@@ -96,6 +97,7 @@ type ChartData = {
   changePercent: number;
   range: string;
   points: ChartPoint[];
+  error?: string;
 };
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -188,7 +190,7 @@ export function PortfolioDashboard() {
     targetPrice: selectedHolding?.targetPrice
   };
   const selectedQuote = quotes[selectedTicker]?.data;
-  const livePrice = chartData?.price ?? selectedQuote?.price;
+  const livePrice = chartData?.price || selectedQuote?.price || null;
   const liveChange = chartData?.change ?? selectedQuote?.change ?? 0;
   const liveChangePercent = chartData ? `${chartData.changePercent.toFixed(2)}%` : selectedQuote?.changePercent;
 
@@ -256,6 +258,7 @@ export function PortfolioDashboard() {
 
         if (!cancelled) {
           setChartData(payload as ChartData);
+          setChartError(typeof payload.error === "string" ? payload.error : "");
         }
       } catch (error) {
         if (!cancelled) {
@@ -307,6 +310,10 @@ export function PortfolioDashboard() {
             }
 
             if (!cancelled) {
+              if (typeof payload.price !== "number" || !Number.isFinite(payload.price)) {
+                throw new Error(payload.error ?? "Quote unavailable.");
+              }
+
               setQuotes((current) => ({
                 ...current,
                 [ticker]: { data: payload as Quote, isLoading: false }
@@ -376,7 +383,7 @@ export function PortfolioDashboard() {
     (acc, holding) => {
       const invested = holding.shares * holding.averageBuyPrice;
       const quote = quotes[holding.ticker]?.data;
-      const currentValue = quote ? holding.shares * quote.price : invested;
+      const currentValue = typeof quote?.price === "number" ? holding.shares * quote.price : invested;
 
       acc.invested += invested;
       acc.currentValue += currentValue;
@@ -389,7 +396,7 @@ export function PortfolioDashboard() {
   const gainPercent = totals.invested ? (totals.profitLoss / totals.invested) * 100 : 0;
   const allocation = holdings.slice(0, 4).map((holding, index) => {
     const quote = quotes[holding.ticker]?.data;
-    const value = quote ? quote.price * holding.shares : holding.shares * holding.averageBuyPrice;
+    const value = typeof quote?.price === "number" ? quote.price * holding.shares : holding.shares * holding.averageBuyPrice;
     return {
       ticker: holding.ticker,
       value,
@@ -700,7 +707,7 @@ export function PortfolioDashboard() {
                       {holdings.map((holding) => {
                         const quote = quotes[holding.ticker]?.data;
                         const invested = holding.shares * holding.averageBuyPrice;
-                        const currentValue = quote ? holding.shares * quote.price : invested;
+                        const currentValue = typeof quote?.price === "number" ? holding.shares * quote.price : invested;
                         const profitLoss = currentValue - invested;
                         const isGain = profitLoss >= 0;
 

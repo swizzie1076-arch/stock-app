@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 type AlphaVantageNewsItem = {
   title?: string;
   url?: string;
@@ -34,10 +36,10 @@ export async function GET(request: Request) {
   }
 
   if (!apiKey || apiKey === "your_api_key_here") {
-    return NextResponse.json(
-      { error: "Missing ALPHA_VANTAGE_API_KEY. Add it to `.env.local` to fetch company news." },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      items: [],
+      error: "Missing ALPHA_VANTAGE_API_KEY. Add it to `.env.local` to fetch company news."
+    });
   }
 
   try {
@@ -49,17 +51,17 @@ export async function GET(request: Request) {
     );
 
     if (!response.ok) {
-      return NextResponse.json({ error: "Alpha Vantage news request failed." }, { status: 502 });
+      return NextResponse.json({ items: [], error: "Alpha Vantage news request failed." });
     }
 
     const payload = (await response.json()) as AlphaVantageNewsResponse;
     const feed = payload.feed;
 
     if (!feed?.length) {
-      return NextResponse.json(
-        { error: payload["Error Message"] ?? payload.Note ?? payload.Information ?? "News unavailable." },
-        { status: 404 }
-      );
+      return NextResponse.json({
+        items: [],
+        error: payload["Error Message"] ?? payload.Note ?? payload.Information ?? "News unavailable."
+      });
     }
 
     return NextResponse.json({
@@ -72,7 +74,10 @@ export async function GET(request: Request) {
         summary: item.summary ?? null
       }))
     });
-  } catch {
-    return NextResponse.json({ error: "Could not fetch company news." }, { status: 502 });
+  } catch (error) {
+    return NextResponse.json({
+      items: [],
+      error: error instanceof Error ? error.message : "Could not fetch company news."
+    });
   }
 }
