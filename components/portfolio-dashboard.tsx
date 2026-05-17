@@ -2,6 +2,7 @@
 
 import type { FormEvent, InputHTMLAttributes } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { SignInButton, useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import {
   Activity,
@@ -31,9 +32,11 @@ import {
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { AuthControls } from "@/components/auth-controls";
 
 type Holding = {
   _id: Id<"holdings">;
+  clerkUserId: string;
   ticker: string;
   companyName?: string;
   shares: number;
@@ -145,7 +148,10 @@ function cleanText(value: FormDataEntryValue | null) {
 }
 
 export function PortfolioDashboard() {
-  const holdingsQuery = useQuery(api.holdings.list);
+  const { isLoaded: isAuthLoaded, isSignedIn, user } = useUser();
+  const clerkUserId = user?.id;
+  const canSaveStocks = Boolean(isAuthLoaded && isSignedIn && clerkUserId);
+  const holdingsQuery = useQuery(api.holdings.list, clerkUserId ? { clerkUserId } : "skip");
   const holdings = (holdingsQuery ?? emptyHoldings) as Holding[];
   const isHoldingsLoading = holdingsQuery === undefined;
   const addHolding = useMutation(api.holdings.add);
@@ -394,6 +400,12 @@ export function PortfolioDashboard() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError("");
+
+    if (!clerkUserId) {
+      setFormError("Sign in to save stocks to your portfolio.");
+      return;
+    }
+
     setIsSaving(true);
 
     const formData = new FormData(event.currentTarget);
@@ -409,6 +421,7 @@ export function PortfolioDashboard() {
 
     try {
       await addHolding({
+        clerkUserId,
         ticker,
         companyName: cleanText(formData.get("companyName")),
         shares,
@@ -540,6 +553,7 @@ export function PortfolioDashboard() {
               >
                 {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
               </button>
+              <AuthControls />
             </div>
           </header>
 
@@ -598,7 +612,9 @@ export function PortfolioDashboard() {
                   <div className="mb-4 flex items-center justify-between">
                     <div>
                       <h2 className="text-base font-bold">Add stock</h2>
-                      <p className="mt-1 text-xs font-semibold text-muted">Saved records write to Convex.</p>
+                      <p className="mt-1 text-xs font-semibold text-muted">
+                        {canSaveStocks ? "Saved records write to your Convex portfolio." : "Sign in to save stocks to your portfolio."}
+                      </p>
                     </div>
                     <BookmarkPlus size={19} className="text-[#0f8a8a]" />
                   </div>
@@ -626,11 +642,21 @@ export function PortfolioDashboard() {
                     <button
                       type="submit"
                       className="mt-1 flex h-11 items-center justify-center gap-2 rounded-lg bg-[#102a2c] px-4 text-sm font-bold text-white transition hover:bg-[#173b3e] disabled:cursor-not-allowed disabled:opacity-70"
-                      disabled={isSaving}
+                      disabled={isSaving || !canSaveStocks}
                     >
                       {isSaving ? <Loader2 className="animate-spin" size={17} /> : <Plus size={17} />}
-                      Save to portfolio
+                      {canSaveStocks ? "Save to portfolio" : "Sign in to save"}
                     </button>
+                    {!canSaveStocks ? (
+                      <SignInButton mode="modal">
+                        <button
+                          type="button"
+                          className="flex h-10 items-center justify-center rounded-lg border border-[#d9e2e7] bg-white px-4 text-sm font-bold text-[#102a2c] transition hover:border-[#0f8a8a]"
+                        >
+                          Sign in or create an account
+                        </button>
+                      </SignInButton>
+                    ) : null}
                   </form>
                 </Panel>
 
@@ -643,7 +669,16 @@ export function PortfolioDashboard() {
                     {isHoldingsLoading ? <Loader2 className="animate-spin text-muted" size={18} /> : <BarChart3 className="text-[#0f8a8a]" size={19} />}
                   </div>
 
-                  {holdings.length === 0 ? (
+                  {!canSaveStocks ? (
+                    <div className="p-5">
+                      <div className="rounded-lg border border-[#e4ebf0] bg-[#fbfcfd] p-4">
+                        <p className="text-sm font-bold">Portfolio is private</p>
+                        <p className="mt-1 text-xs font-semibold leading-5 text-muted">
+                          Sign in to view saved companies and keep your watchlist synced with Convex.
+                        </p>
+                      </div>
+                    </div>
+                  ) : holdings.length === 0 ? (
                     <div className="grid gap-3 p-5">
                       {starterCompanies.map((company) => (
                         <button
@@ -687,9 +722,10 @@ export function PortfolioDashboard() {
                             <ValueBlock label="P/L" value={formatCurrency(profitLoss)} tone={isGain ? "gain" : "loss"} />
                             <button
                               type="button"
-                              onClick={() => deleteHolding({ id: holding._id })}
+                              onClick={() => clerkUserId && deleteHolding({ id: holding._id, clerkUserId })}
                               className="flex h-9 w-9 items-center justify-center rounded-md border border-red-100 text-loss transition hover:bg-red-50"
                               aria-label={`Delete ${holding.ticker}`}
+                              disabled={!clerkUserId}
                             >
                               <Trash2 size={16} />
                             </button>

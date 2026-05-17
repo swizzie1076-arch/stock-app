@@ -1,6 +1,1 @@
-{
-  "/api/chart/route": "app/api/chart/route.js",
-  "/api/news/route": "app/api/news/route.js",
-  "/api/quote/route": "app/api/quote/route.js",
-  "/page": "app/page.js"
-}
+{}

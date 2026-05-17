@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export default defineSchema({
   holdings: defineTable({
+    clerkUserId: v.string(),
     ticker: v.string(),
     companyName: v.optional(v.string()),
     shares: v.number(),
@@ -14,5 +15,7 @@ export default defineSchema({
     createdAt: v.number()
   })
     .index("by_ticker", ["ticker"])
+    .index("by_user_ticker", ["clerkUserId", "ticker"])
+    .index("by_user_createdAt", ["clerkUserId", "createdAt"])
     .index("by_createdAt", ["createdAt"])
 });

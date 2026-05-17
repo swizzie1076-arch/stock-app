@@ -94,6 +94,13 @@ button {
   color: #7dd3fc !important;
 }
 
+.stock-app.dark-mode .auth-controls button,
+.stock-app.dark-mode .auth-controls > div {
+  background-color: #101923 !important;
+  border-color: #263645 !important;
+  color: #e6edf3 !important;
+}
+
 .stock-app.dark-mode svg line {
   stroke: #263645;
 }
