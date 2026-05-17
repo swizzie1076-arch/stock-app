@@ -2,6 +2,7 @@
 
 import type { FormEvent, InputHTMLAttributes } from "react";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { SignInButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import {
@@ -16,6 +17,7 @@ import {
   Globe2,
   LayoutDashboard,
   LineChart,
+  LockKeyhole,
   Loader2,
   Moon,
   Newspaper,
@@ -34,6 +36,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { AuthControls } from "@/components/auth-controls";
 import { useAuthState } from "@/components/auth-state-provider";
+import { canUseFeature, getBillingPlan, getSaveLimitLabel } from "@/lib/billing-plans";
 
 type Holding = {
   _id: Id<"holdings">;
@@ -152,12 +155,17 @@ function cleanText(value: FormDataEntryValue | null) {
 }
 
 export function PortfolioDashboard() {
-  const { clerkEnabled, isLoaded: isAuthLoaded, isSignedIn, userId } = useAuthState();
+  const { clerkEnabled, isLoaded: isAuthLoaded, isSignedIn, userId, plan } = useAuthState();
   const clerkUserId = userId;
-  const canSaveStocks = Boolean(isAuthLoaded && isSignedIn && clerkUserId);
-  const holdingsQuery = useQuery(api.holdings.list, isAuthLoaded ? (clerkUserId ? { clerkUserId } : {}) : "skip");
+  const currentPlan = getBillingPlan(plan);
+  const planCanSaveStocks = canUseFeature(plan, "saveStocks");
+  const canLoadHoldings = Boolean(isAuthLoaded && isSignedIn && clerkUserId && planCanSaveStocks);
+  const holdingsQuery = useQuery(api.holdings.list, canLoadHoldings && clerkUserId ? { clerkUserId } : "skip");
   const holdings = (holdingsQuery ?? emptyHoldings) as Holding[];
-  const isHoldingsLoading = canSaveStocks && holdingsQuery === undefined;
+  const isStarterAtLimit = currentPlan.saveLimit !== "unlimited" && holdings.length >= currentPlan.saveLimit;
+  const canSaveStocks = Boolean(canLoadHoldings && !isStarterAtLimit);
+  const isHoldingsLoading = canLoadHoldings && holdingsQuery === undefined;
+  const saveLimitLabel = getSaveLimitLabel(plan);
   const addHolding = useMutation(api.holdings.add);
   const deleteHolding = useMutation(api.holdings.remove);
   const [quotes, setQuotes] = useState<Record<string, QuoteState>>({});
@@ -195,6 +203,17 @@ export function PortfolioDashboard() {
   const livePrice = chartData?.price || selectedQuote?.price || null;
   const liveChange = chartData?.change ?? selectedQuote?.change ?? 0;
   const liveChangePercent = chartData ? `${chartData.changePercent.toFixed(2)}%` : selectedQuote?.changePercent;
+  const hasProFeatures = canUseFeature(plan, "analytics");
+  const hasPremiumFeatures = canUseFeature(plan, "aiSummaries");
+  const saveRestriction = !clerkEnabled
+    ? "Add Clerk keys in Vercel to enable secure portfolio saves."
+    : !isSignedIn
+      ? "Sign in to save stocks to your portfolio."
+      : !planCanSaveStocks
+        ? "Upgrade to Starter to save stocks to your portfolio."
+        : isStarterAtLimit
+          ? "Starter includes up to 5 saved stocks. Upgrade to Pro for unlimited saves."
+          : "";
 
   useEffect(() => {
     setIsDarkMode(window.localStorage.getItem("atlas-theme") === "dark");
@@ -415,6 +434,16 @@ export function PortfolioDashboard() {
       return;
     }
 
+    if (!planCanSaveStocks) {
+      setFormError("Upgrade to Starter to save stocks to your portfolio.");
+      return;
+    }
+
+    if (isStarterAtLimit) {
+      setFormError("Starter includes up to 5 saved stocks. Upgrade to Pro for unlimited saves.");
+      return;
+    }
+
     setIsSaving(true);
 
     const formData = new FormData(event.currentTarget);
@@ -622,7 +651,7 @@ export function PortfolioDashboard() {
                     <div>
                       <h2 className="text-base font-bold">Add stock</h2>
                       <p className="mt-1 text-xs font-semibold text-muted">
-                        {canSaveStocks ? "Saved records write to your Convex portfolio." : "Sign in to save stocks to your portfolio."}
+                        {canSaveStocks ? `Saved records write to Convex. ${saveLimitLabel}.` : saveRestriction}
                       </p>
                     </div>
                     <BookmarkPlus size={19} className="text-[#0f8a8a]" />
@@ -654,9 +683,9 @@ export function PortfolioDashboard() {
                       disabled={isSaving || !canSaveStocks}
                     >
                       {isSaving ? <Loader2 className="animate-spin" size={17} /> : <Plus size={17} />}
-                      {canSaveStocks ? "Save to portfolio" : "Sign in to save"}
+                      {canSaveStocks ? "Save to portfolio" : isSignedIn ? "Upgrade to save" : "Sign in to save"}
                     </button>
-                    {!canSaveStocks && clerkEnabled ? (
+                    {!canSaveStocks && clerkEnabled && !isSignedIn ? (
                       <SignInButton mode="modal">
                         <button
                           type="button"
@@ -666,9 +695,17 @@ export function PortfolioDashboard() {
                         </button>
                       </SignInButton>
                     ) : null}
+                    {!canSaveStocks && clerkEnabled && isSignedIn ? (
+                      <Link
+                        href="/pricing"
+                        className="flex h-10 items-center justify-center rounded-lg border border-[#d9e2e7] bg-white px-4 text-sm font-bold text-[#102a2c] transition hover:border-[#0f8a8a]"
+                      >
+                        View upgrade options
+                      </Link>
+                    ) : null}
                     {!canSaveStocks && !clerkEnabled ? (
                       <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-700">
-                        Add Clerk keys in Vercel to enable secure portfolio saves.
+                        {saveRestriction}
                       </p>
                     ) : null}
                   </form>
@@ -683,13 +720,23 @@ export function PortfolioDashboard() {
                     {isHoldingsLoading ? <Loader2 className="animate-spin text-muted" size={18} /> : <BarChart3 className="text-[#0f8a8a]" size={19} />}
                   </div>
 
-                  {!canSaveStocks ? (
+                  {!canLoadHoldings ? (
                     <div className="p-5">
                       <div className="rounded-lg border border-[#e4ebf0] bg-[#fbfcfd] p-4">
-                        <p className="text-sm font-bold">Portfolio is private</p>
+                        <p className="text-sm font-bold">{isSignedIn ? "Portfolio saves are locked" : "Portfolio is private"}</p>
                         <p className="mt-1 text-xs font-semibold leading-5 text-muted">
-                          Sign in to view saved companies and keep your watchlist synced with Convex.
+                          {isSignedIn
+                            ? "Free includes the dashboard only. Upgrade to Starter to save and view portfolio records."
+                            : "Sign in to view saved companies and keep your watchlist synced with Convex."}
                         </p>
+                        {isSignedIn ? (
+                          <Link
+                            href="/pricing"
+                            className="mt-3 inline-flex h-9 items-center rounded-lg bg-[#102a2c] px-3 text-xs font-bold text-white"
+                          >
+                            Compare plans
+                          </Link>
+                        ) : null}
                       </div>
                     </div>
                   ) : holdings.length === 0 ? (
@@ -855,9 +902,22 @@ export function PortfolioDashboard() {
                   <Sparkles size={18} className="text-[#ea580c]" />
                 </div>
                 <div className="space-y-3">
-                  <ResearchItem icon={Activity} title="Earnings quality" detail="Review margin durability and guidance tone." />
-                  <ResearchItem icon={CalendarDays} title="Upcoming events" detail="Track earnings, investor day, and product launches." />
-                  <ResearchItem icon={Globe2} title="Macro exposure" detail="Check rate sensitivity, FX, and demand cycle risk." />
+                  {hasProFeatures ? (
+                    <>
+                      <ResearchItem icon={Activity} title="Analytics" detail="Review allocation, performance drift, and concentration." />
+                      <ResearchItem icon={CalendarDays} title="Alerts" detail="Track earnings, target prices, and portfolio events." />
+                    </>
+                  ) : (
+                    <LockedFeature title="Analytics and alerts" detail="Upgrade to Pro to unlock portfolio analytics and alerts." />
+                  )}
+                  {hasPremiumFeatures ? (
+                    <>
+                      <ResearchItem icon={Sparkles} title="AI summaries" detail="Condense news, earnings, and thesis notes into quick briefs." />
+                      <ResearchItem icon={Globe2} title="Advanced analytics" detail="Compare deeper signals across watchlist and holdings." />
+                    </>
+                  ) : (
+                    <LockedFeature title="AI summaries and exports" detail="Upgrade to Premium for AI summaries, exports, and advanced analytics." />
+                  )}
                 </div>
               </Panel>
 
@@ -1033,6 +1093,25 @@ function ResearchItem({ icon: Icon, title, detail }: { icon: typeof Activity; ti
       </div>
       <div>
         <p className="text-sm font-bold">{title}</p>
+        <p className="mt-1 text-xs font-semibold leading-5 text-muted">{detail}</p>
+      </div>
+    </div>
+  );
+}
+
+function LockedFeature({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="flex gap-3 rounded-lg border border-[#e4ebf0] bg-[#fbfcfd] p-3">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white text-slate-500 shadow-sm">
+        <LockKeyhole size={16} />
+      </div>
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-bold">{title}</p>
+          <Link href="/pricing" className="rounded-md bg-[#102a2c] px-2 py-0.5 text-[11px] font-black uppercase text-white">
+            Upgrade
+          </Link>
+        </div>
         <p className="mt-1 text-xs font-semibold leading-5 text-muted">{detail}</p>
       </div>
     </div>

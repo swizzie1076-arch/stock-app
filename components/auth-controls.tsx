@@ -3,6 +3,7 @@
 import { ClerkLoaded, ClerkLoading, SignInButton, SignUpButton, UserButton, useUser } from "@clerk/nextjs";
 import { Loader2 } from "lucide-react";
 import { useAuthState } from "@/components/auth-state-provider";
+import { getBillingPlan } from "@/lib/billing-plans";
 
 export function AuthControls() {
   const { clerkEnabled } = useAuthState();
@@ -20,6 +21,8 @@ export function AuthControls() {
 
 function ClerkAuthControls() {
   const { user } = useUser();
+  const { plan } = useAuthState();
+  const currentPlan = getBillingPlan(plan);
 
   return (
     <div className="auth-controls flex w-full items-center gap-2 sm:w-auto">
@@ -34,6 +37,9 @@ function ClerkAuthControls() {
           <div className="flex h-11 w-full items-center justify-between gap-3 rounded-lg border border-[#d9e2e7] bg-white px-2.5 shadow-sm sm:w-auto">
             <span className="hidden max-w-36 truncate text-xs font-bold text-muted sm:block">
               {user.firstName ?? user.primaryEmailAddress?.emailAddress ?? "Signed in"}
+            </span>
+            <span className="rounded-md bg-[#e9f8f3] px-2 py-1 text-[11px] font-black uppercase tracking-normal text-[#0f766e]">
+              {currentPlan.name}
             </span>
             <UserButton
               appearance={{
