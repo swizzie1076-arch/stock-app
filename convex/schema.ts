@@ -3,7 +3,8 @@ import { v } from "convex/values";
 
 export default defineSchema({
   holdings: defineTable({
-    clerkUserId: v.string(),
+    clerkUserId: v.optional(v.string()),
+    userId: v.optional(v.string()),
     ticker: v.string(),
     companyName: v.optional(v.string()),
     shares: v.number(),

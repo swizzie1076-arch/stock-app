@@ -1,16 +1,28 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 const normalizeTicker = (ticker: string) => ticker.trim().toUpperCase();
 
+async function getRequestUserId(ctx: QueryCtx | MutationCtx, fallbackUserId?: string) {
+  const identity = await ctx.auth.getUserIdentity();
+  const userId = identity?.subject ?? fallbackUserId?.trim();
+  return userId || null;
+}
+
 export const list = query({
   args: {
-    clerkUserId: v.string()
+    clerkUserId: v.optional(v.string())
   },
   handler: async (ctx, args) => {
+    const userId = await getRequestUserId(ctx, args.clerkUserId);
+    if (!userId) {
+      return [];
+    }
+
     return await ctx.db
       .query("holdings")
-      .withIndex("by_user_createdAt", (q) => q.eq("clerkUserId", args.clerkUserId))
+      .withIndex("by_user_createdAt", (q) => q.eq("clerkUserId", userId))
       .order("desc")
       .collect();
   }
@@ -29,7 +41,7 @@ export const add = mutation({
     targetPrice: v.optional(v.number())
   },
   handler: async (ctx, args) => {
-    const clerkUserId = args.clerkUserId.trim();
+    const clerkUserId = (await getRequestUserId(ctx, args.clerkUserId)) ?? "";
     const ticker = normalizeTicker(args.ticker);
     const companyName = args.companyName?.trim();
     const sector = args.sector?.trim();
@@ -69,6 +81,7 @@ export const add = mutation({
 
     return await ctx.db.insert("holdings", {
       clerkUserId,
+      userId: clerkUserId,
       ticker,
       companyName: companyName || ticker,
       shares: args.shares,
@@ -85,11 +98,17 @@ export const add = mutation({
 export const remove = mutation({
   args: {
     id: v.id("holdings"),
-    clerkUserId: v.string()
+    clerkUserId: v.optional(v.string())
   },
   handler: async (ctx, args) => {
+    const userId = await getRequestUserId(ctx, args.clerkUserId);
+    if (!userId) {
+      throw new Error("You must be signed in to remove stocks.");
+    }
+
     const holding = await ctx.db.get(args.id);
-    if (!holding || holding.clerkUserId !== args.clerkUserId.trim()) {
+    const holdingUserId = holding?.clerkUserId ?? holding?.userId;
+    if (!holding || holdingUserId !== userId) {
       throw new Error("You can only remove your own saved stocks.");
     }
     await ctx.db.delete(args.id);

@@ -37,7 +37,8 @@ import { useAuthState } from "@/components/auth-state-provider";
 
 type Holding = {
   _id: Id<"holdings">;
-  clerkUserId: string;
+  clerkUserId?: string;
+  userId?: string;
   ticker: string;
   companyName?: string;
   shares: number;
@@ -154,9 +155,9 @@ export function PortfolioDashboard() {
   const { clerkEnabled, isLoaded: isAuthLoaded, isSignedIn, userId } = useAuthState();
   const clerkUserId = userId;
   const canSaveStocks = Boolean(isAuthLoaded && isSignedIn && clerkUserId);
-  const holdingsQuery = useQuery(api.holdings.list, clerkUserId ? { clerkUserId } : "skip");
+  const holdingsQuery = useQuery(api.holdings.list, isAuthLoaded ? (clerkUserId ? { clerkUserId } : {}) : "skip");
   const holdings = (holdingsQuery ?? emptyHoldings) as Holding[];
-  const isHoldingsLoading = holdingsQuery === undefined;
+  const isHoldingsLoading = canSaveStocks && holdingsQuery === undefined;
   const addHolding = useMutation(api.holdings.add);
   const deleteHolding = useMutation(api.holdings.remove);
   const [quotes, setQuotes] = useState<Record<string, QuoteState>>({});
