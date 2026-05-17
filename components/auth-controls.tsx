@@ -2,8 +2,23 @@
 
 import { ClerkLoaded, ClerkLoading, SignInButton, SignUpButton, UserButton, useUser } from "@clerk/nextjs";
 import { Loader2 } from "lucide-react";
+import { useAuthState } from "@/components/auth-state-provider";
 
 export function AuthControls() {
+  const { clerkEnabled } = useAuthState();
+
+  if (!clerkEnabled) {
+    return (
+      <div className="auth-controls flex h-11 w-full items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-3 text-xs font-bold text-amber-700 shadow-sm sm:w-auto">
+        Auth setup needed
+      </div>
+    );
+  }
+
+  return <ClerkAuthControls />;
+}
+
+function ClerkAuthControls() {
   const { user } = useUser();
 
   return (

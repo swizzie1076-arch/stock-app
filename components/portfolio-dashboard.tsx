@@ -2,7 +2,7 @@
 
 import type { FormEvent, InputHTMLAttributes } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { SignInButton, useUser } from "@clerk/nextjs";
+import { SignInButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import {
   Activity,
@@ -33,6 +33,7 @@ import {
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { AuthControls } from "@/components/auth-controls";
+import { useAuthState } from "@/components/auth-state-provider";
 
 type Holding = {
   _id: Id<"holdings">;
@@ -150,8 +151,8 @@ function cleanText(value: FormDataEntryValue | null) {
 }
 
 export function PortfolioDashboard() {
-  const { isLoaded: isAuthLoaded, isSignedIn, user } = useUser();
-  const clerkUserId = user?.id;
+  const { clerkEnabled, isLoaded: isAuthLoaded, isSignedIn, userId } = useAuthState();
+  const clerkUserId = userId;
   const canSaveStocks = Boolean(isAuthLoaded && isSignedIn && clerkUserId);
   const holdingsQuery = useQuery(api.holdings.list, clerkUserId ? { clerkUserId } : "skip");
   const holdings = (holdingsQuery ?? emptyHoldings) as Holding[];
@@ -654,7 +655,7 @@ export function PortfolioDashboard() {
                       {isSaving ? <Loader2 className="animate-spin" size={17} /> : <Plus size={17} />}
                       {canSaveStocks ? "Save to portfolio" : "Sign in to save"}
                     </button>
-                    {!canSaveStocks ? (
+                    {!canSaveStocks && clerkEnabled ? (
                       <SignInButton mode="modal">
                         <button
                           type="button"
@@ -663,6 +664,11 @@ export function PortfolioDashboard() {
                           Sign in or create an account
                         </button>
                       </SignInButton>
+                    ) : null}
+                    {!canSaveStocks && !clerkEnabled ? (
+                      <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-700">
+                        Add Clerk keys in Vercel to enable secure portfolio saves.
+                      </p>
                     ) : null}
                   </form>
                 </Panel>
