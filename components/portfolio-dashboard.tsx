@@ -3,6 +3,7 @@
 import type { FormEvent, InputHTMLAttributes } from "react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { SignInButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import {
@@ -121,6 +122,14 @@ const starterCompanies = [
   { ticker: "TSLA", companyName: "Tesla", sector: "EVs and energy", color: "#ea580c" }
 ];
 
+const sidebarNavItems = [
+  { href: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/portfolio", icon: BriefcaseBusiness, label: "Portfolio" },
+  { href: "/discover", icon: Search, label: "Discover" },
+  { href: "/news", icon: Newspaper, label: "News" },
+  { href: "/research", icon: FileText, label: "Research" }
+];
+
 const marketNews = [
   { title: "Mega-cap tech leads a measured morning rally", source: "Market desk", time: "Today" },
   { title: "Cloud spending estimates remain resilient into earnings", source: "Research note", time: "Today" },
@@ -155,6 +164,7 @@ function cleanText(value: FormDataEntryValue | null) {
 }
 
 export function PortfolioDashboard() {
+  const pathname = usePathname();
   const { clerkEnabled, isLoaded: isAuthLoaded, isSignedIn, userId, plan } = useAuthState();
   const clerkUserId = userId;
   const currentPlan = getBillingPlan(plan);
@@ -500,6 +510,10 @@ export function PortfolioDashboard() {
     setSearchResults([]);
   }
 
+  function isActivePath(href: string) {
+    return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+  }
+
   return (
     <main className={`stock-app atlas-dashboard min-h-screen bg-[#05080d] text-ink ${isDarkMode ? "dark-mode" : ""}`}>
       <div className="grid min-h-screen lg:grid-cols-[248px_minmax(0,1fr)]">
@@ -516,11 +530,9 @@ export function PortfolioDashboard() {
             </div>
 
             <nav className="space-y-1.5">
-              <NavItem icon={LayoutDashboard} label="Dashboard" active />
-              <NavItem icon={BriefcaseBusiness} label="Portfolio" />
-              <NavItem icon={Search} label="Discover" />
-              <NavItem icon={Newspaper} label="News" />
-              <NavItem icon={FileText} label="Research" />
+              {sidebarNavItems.map((item) => (
+                <NavItem key={item.href} href={item.href} icon={item.icon} label={item.label} active={isActivePath(item.href)} />
+              ))}
             </nav>
 
             <div className="premium-card mt-auto p-3">
@@ -971,17 +983,17 @@ function Panel({ children, className = "" }: { children: React.ReactNode; classN
   return <section className={`premium-card border border-[#dfe7ec] bg-white shadow-[0_18px_50px_rgba(16,24,40,0.06)] ${className}`}>{children}</section>;
 }
 
-function NavItem({ icon: Icon, label, active }: { icon: typeof LayoutDashboard; label: string; active?: boolean }) {
+function NavItem({ href, icon: Icon, label, active }: { href: string; icon: typeof LayoutDashboard; label: string; active?: boolean }) {
   return (
-    <button
+    <Link
+      href={href}
       className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-bold transition ${
         active ? "bg-[#6ee7d8]/12 text-[#6ee7d8] ring-1 ring-[#6ee7d8]/25" : "text-slate-600 hover:bg-white/[0.06] hover:text-ink"
       }`}
-      type="button"
     >
       <Icon size={17} />
       {label}
-    </button>
+    </Link>
   );
 }
 

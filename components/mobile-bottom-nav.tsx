@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CreditCard, Home, LayoutDashboard, WalletCards } from "lucide-react";
+import { BriefcaseBusiness, FileText, LayoutDashboard, Newspaper, Search } from "lucide-react";
 
 const navItems = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/portfolio", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/pricing", label: "Plans", icon: CreditCard },
-  { href: "/install", label: "Install", icon: WalletCards },
-  { href: "/account/billing", label: "Billing", icon: BarChart3 }
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/portfolio", label: "Portfolio", icon: BriefcaseBusiness },
+  { href: "/discover", label: "Discover", icon: Search },
+  { href: "/news", label: "News", icon: Newspaper },
+  { href: "/research", label: "Research", icon: FileText }
 ];
 
 export function MobileBottomNav() {
