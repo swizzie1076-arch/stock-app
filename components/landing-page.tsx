@@ -22,7 +22,7 @@ import { AuthControls } from "@/components/auth-controls";
 const features = [
   { icon: LineChart, title: "Live market cockpit", detail: "Search tickers, inspect charts, quotes, and company news in one dense research view." },
   { icon: WalletCards, title: "Convex portfolio", detail: "Save holdings, thesis notes, targets, and conviction with a clean authenticated backend." },
-  { icon: Bell, title: "Plan-gated workflow", detail: "Starter saves, Pro analytics and alerts, Premium AI summaries and exports." },
+  { icon: Bell, title: "Plan-gated workflow", detail: "Free saves 3 stocks, Starter saves 15, Pro analytics and alerts, Premium AI summaries and exports." },
   { icon: ShieldCheck, title: "Clerk secured", detail: "Authentication, billing, and account controls are built into the product shell." }
 ];
 
@@ -33,7 +33,7 @@ const testimonials = [
 ];
 
 const faqs = [
-  ["Can I use Atlas Invest for free?", "Yes. Free includes the dashboard, ticker search, charts, and news. Saving stocks starts on Starter."],
+  ["Can I use Atlas Invest for free?", "Yes. Free includes the dashboard, ticker search, charts, news, and up to 3 saved stocks."],
   ["Where is billing managed?", "Plans, checkout, and account settings are handled with Clerk Billing."],
   ["Does Atlas place trades?", "No. Atlas is a research and portfolio tracking cockpit, not a brokerage."]
 ];

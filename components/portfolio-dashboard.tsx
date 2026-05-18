@@ -211,11 +211,11 @@ export function PortfolioDashboard() {
   const saveRestriction = !clerkEnabled
     ? "Add Clerk keys in Vercel to enable secure portfolio saves."
     : !isSignedIn
-      ? "Sign in to save stocks to your portfolio."
-      : !planCanSaveStocks
-        ? "Upgrade to Starter to save stocks to your portfolio."
+        ? "Sign in to save stocks to your portfolio."
+        : !planCanSaveStocks
+          ? "Upgrade to unlock saved stocks."
         : isStarterAtLimit
-          ? "Starter includes up to 5 saved stocks. Upgrade to Pro for unlimited saves."
+          ? `${currentPlan.name} includes up to ${currentPlan.saveLimit} saved stocks. ${plan === "free" ? "Upgrade to Starter for 15 saves." : "Upgrade to Pro for unlimited saves."}`
           : "";
 
   useEffect(() => {
@@ -438,12 +438,16 @@ export function PortfolioDashboard() {
     }
 
     if (!planCanSaveStocks) {
-      setFormError("Upgrade to Starter to save stocks to your portfolio.");
+      setFormError("Upgrade to unlock saved stocks.");
       return;
     }
 
     if (isStarterAtLimit) {
-      setFormError("Starter includes up to 5 saved stocks. Upgrade to Pro for unlimited saves.");
+      setFormError(
+        `${currentPlan.name} includes up to ${currentPlan.saveLimit} saved stocks. ${
+          plan === "free" ? "Upgrade to Starter for 15 saves." : "Upgrade to Pro for unlimited saves."
+        }`
+      );
       return;
     }
 
@@ -729,7 +733,7 @@ export function PortfolioDashboard() {
                         <p className="text-sm font-bold">{isSignedIn ? "Portfolio saves are locked" : "Portfolio is private"}</p>
                         <p className="mt-1 text-xs font-semibold leading-5 text-muted">
                           {isSignedIn
-                            ? "Free includes the dashboard only. Upgrade to Starter to save and view portfolio records."
+                            ? "Sign in to save up to 3 stocks on Free, or upgrade for higher portfolio limits."
                             : "Sign in to view saved companies and keep your watchlist synced with Convex."}
                         </p>
                         {isSignedIn ? (

@@ -18,9 +18,9 @@ export const billingPlans: BillingPlan[] = [
     key: "free",
     name: "Free",
     price: "$0",
-    description: "Market dashboard, ticker search, quote charts, and news.",
-    saveLimit: 0,
-    features: ["Dashboard only", "Ticker search", "Charts and latest news"]
+    description: "Market dashboard, ticker search, charts, news, and a small saved-stock list.",
+    saveLimit: 3,
+    features: ["Save up to 3 stocks", "Ticker search", "Charts and latest news"]
   },
   {
     key: "starter",
@@ -28,8 +28,8 @@ export const billingPlans: BillingPlan[] = [
     name: "Starter",
     price: "$1",
     description: "A lightweight saved-stock portfolio for early research.",
-    saveLimit: 5,
-    features: ["Save up to 5 stocks", "Convex-backed portfolio", "Research notes"]
+    saveLimit: 15,
+    features: ["Save up to 15 stocks", "Convex-backed portfolio", "Research notes"]
   },
   {
     key: "pro",
@@ -66,7 +66,7 @@ export function getBillingPlan(planKey: BillingPlanKey) {
 export function canUseFeature(planKey: BillingPlanKey, feature: BillingFeature) {
   const rank = planRank[planKey];
 
-  if (feature === "saveStocks") return rank >= planRank.starter;
+  if (feature === "saveStocks") return rank >= planRank.free;
   if (feature === "analytics" || feature === "alerts") return rank >= planRank.pro;
   return rank >= planRank.premium;
 }
