@@ -1,12 +1,45 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 import { ConvexClientProvider } from "@/components/convex-client-provider";
 import { AuthStateProvider } from "@/components/auth-state-provider";
+import { PwaRegister } from "@/components/pwa-register";
+import { MobileBottomNav } from "@/components/mobile-bottom-nav";
 
 export const metadata: Metadata = {
   title: "Atlas Invest",
-  description: "A stock research and portfolio cockpit powered by Convex and server-routed market data."
+  description: "A stock research and portfolio cockpit powered by Convex and server-routed market data.",
+  manifest: "/manifest.json",
+  applicationName: "Atlas Invest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Atlas Invest"
+  },
+  formatDetection: {
+    telephone: false
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/icons/icon.svg", type: "image/svg+xml" }
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }]
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-status-bar-style": "black-translucent"
+  }
+};
+
+export const viewport: Viewport = {
+  themeColor: "#05080d",
+  colorScheme: "dark",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -42,6 +75,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         ) : (
           app
         )}
+        <PwaRegister />
+        <MobileBottomNav />
       </body>
     </html>
   );

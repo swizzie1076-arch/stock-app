@@ -201,6 +201,20 @@ button {
   }
 }
 
+@media (max-width: 1023px) {
+  .stock-app {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
+
+  .atlas-dashboard {
+    min-width: 0;
+  }
+
+  .atlas-dashboard header {
+    gap: 1rem;
+  }
+}
+
 .stock-app.dark-mode [class*="bg-[#fbfcfd]"],
 .stock-app.dark-mode [class*="bg-[#f6faf8]"],
 .stock-app.dark-mode [class*="bg-[#f3fbf8]"],
