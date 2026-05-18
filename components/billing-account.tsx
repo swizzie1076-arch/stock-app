@@ -11,26 +11,26 @@ export function BillingAccount({ clerkEnabled }: { clerkEnabled: boolean }) {
   const currentPlan = getBillingPlan(plan);
 
   return (
-    <main className="stock-app dark-mode min-h-screen bg-[#0a1118] px-4 py-6 text-[#e6edf3] sm:px-6 lg:px-8">
+    <main className="stock-app dark-mode atlas-landing min-h-screen bg-[#05080d] px-4 py-6 text-[#e6edf3] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl">
-        <header className="mb-6 flex flex-col gap-4 border-b border-[#263645] pb-6 sm:flex-row sm:items-center sm:justify-between">
+        <header className="mb-6 flex flex-col gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <Link href="/" className="inline-flex items-center gap-2 text-sm font-black text-[#6ee7d8]">
               <ArrowLeft size={16} />
-              Dashboard
+              Home
             </Link>
-            <h1 className="mt-4 text-3xl font-semibold tracking-normal">Billing settings</h1>
-            <p className="mt-2 text-sm font-semibold text-[#9fb0c2]">Manage your Atlas Invest subscription and account details.</p>
+            <h1 className="mt-4 text-4xl font-semibold tracking-normal text-white">Billing settings</h1>
+            <p className="mt-3 text-sm font-semibold leading-6 text-[#9fb0c2]">Manage your Atlas Invest subscription and account details.</p>
           </div>
           <Link
             href="/pricing"
-            className="inline-flex h-10 items-center justify-center rounded-lg border border-[#3b5366] px-4 text-sm font-black text-white transition hover:border-[#6ee7d8]"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-white transition hover:border-[#6ee7d8]/50"
           >
             {currentPlan.name} plan
           </Link>
         </header>
 
-        <section className="rounded-lg border border-[#263645] bg-[#101923] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.24)] sm:p-6">
+        <section className="premium-card p-4 sm:p-6">
           {clerkEnabled ? (
             <>
               <ClerkLoading>

@@ -176,7 +176,7 @@ export function PortfolioDashboard() {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [newsError, setNewsError] = useState("");
   const [isNewsLoading, setIsNewsLoading] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(true);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [chartRange, setChartRange] = useState("6mo");
@@ -203,6 +203,9 @@ export function PortfolioDashboard() {
   const livePrice = chartData?.price || selectedQuote?.price || null;
   const liveChange = chartData?.change ?? selectedQuote?.change ?? 0;
   const liveChangePercent = chartData ? `${chartData.changePercent.toFixed(2)}%` : selectedQuote?.changePercent;
+  const chartNotice = chartError.includes("Alpha Vantage")
+    ? "Chart data is temporarily rate limited. Showing the fallback trend."
+    : chartError;
   const hasProFeatures = canUseFeature(plan, "analytics");
   const hasPremiumFeatures = canUseFeature(plan, "aiSummaries");
   const saveRestriction = !clerkEnabled
@@ -216,7 +219,7 @@ export function PortfolioDashboard() {
           : "";
 
   useEffect(() => {
-    setIsDarkMode(window.localStorage.getItem("atlas-theme") === "dark");
+    setIsDarkMode(window.localStorage.getItem("atlas-theme") !== "light");
   }, []);
 
   useEffect(() => {
@@ -494,21 +497,21 @@ export function PortfolioDashboard() {
   }
 
   return (
-    <main className={`stock-app min-h-screen bg-[#f7f9fb] text-ink ${isDarkMode ? "dark-mode" : ""}`}>
-      <div className="grid min-h-screen lg:grid-cols-[232px_minmax(0,1fr)]">
+    <main className={`stock-app atlas-dashboard min-h-screen bg-[#05080d] text-ink ${isDarkMode ? "dark-mode" : ""}`}>
+      <div className="grid min-h-screen lg:grid-cols-[248px_minmax(0,1fr)]">
         <aside className="hidden border-r border-[#dfe7ec] bg-white lg:block">
           <div className="sticky top-0 flex h-screen flex-col px-4 py-5">
             <div className="mb-7 flex items-center gap-3 px-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#102a2c] text-white">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#6ee7d8]/30 bg-[#6ee7d8]/10 text-[#6ee7d8] shadow-[0_0_32px_rgba(20,184,166,0.18)]">
                 <LineChart size={20} />
               </div>
               <div>
-                <p className="text-base font-bold">Atlas Invest</p>
-                <p className="text-xs font-semibold text-muted">Research cockpit</p>
+                <p className="text-base font-black tracking-normal">Atlas Invest</p>
+                <p className="text-xs font-semibold text-muted">Market command</p>
               </div>
             </div>
 
-            <nav className="space-y-1">
+            <nav className="space-y-1.5">
               <NavItem icon={LayoutDashboard} label="Dashboard" active />
               <NavItem icon={BriefcaseBusiness} label="Portfolio" />
               <NavItem icon={Search} label="Discover" />
@@ -516,8 +519,8 @@ export function PortfolioDashboard() {
               <NavItem icon={FileText} label="Research" />
             </nav>
 
-            <div className="mt-auto rounded-lg border border-[#dfe7ec] bg-[#f6faf8] p-3">
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-md bg-white text-[#0f8a8a] shadow-sm">
+            <div className="premium-card mt-auto p-3">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-md bg-white/5 text-[#6ee7d8] shadow-sm">
                 <ShieldCheck size={18} />
               </div>
               <p className="text-sm font-bold">Paper portfolio</p>
@@ -527,17 +530,17 @@ export function PortfolioDashboard() {
         </aside>
 
         <section className="min-w-0 px-4 py-4 sm:px-6 lg:px-7">
-          <header className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <header className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <h1 className="text-2xl font-semibold tracking-normal text-[#0f172a] sm:text-3xl">Portfolio cockpit</h1>
-              <p className="mt-1 text-sm font-medium text-muted">Search, research, and save companies into your Convex-backed portfolio.</p>
+              <h1 className="text-3xl font-semibold tracking-normal text-[#0f172a] sm:text-4xl">Portfolio cockpit</h1>
+              <p className="mt-2 text-sm font-semibold text-muted">Search, research, and save companies into your Convex-backed portfolio.</p>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="relative sm:w-[360px]">
                 <form
                   onSubmit={handleSearchSubmit}
-                  className="flex h-11 min-w-0 items-center gap-2 rounded-lg border border-[#d9e2e7] bg-white px-3 shadow-sm"
+                  className="flex h-11 min-w-0 items-center gap-2 rounded-lg border border-[#d9e2e7] bg-white/80 px-3 shadow-sm"
                 >
                   <Search size={18} className="shrink-0 text-muted" />
                   <input
@@ -546,16 +549,16 @@ export function PortfolioDashboard() {
                     placeholder="Search ticker or company"
                     className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400"
                   />
-                  <button className="rounded-md bg-[#102a2c] px-3 py-1.5 text-xs font-bold text-white" type="submit">
+                  <button className="premium-button rounded-md px-3 py-1.5 text-xs font-bold" type="submit">
                     View
                   </button>
                 </form>
                 {searchTerm.trim().length >= 2 ? (
-                  <div className="absolute left-0 right-0 top-12 z-20 overflow-hidden rounded-lg border border-[#d9e2e7] bg-white shadow-[0_18px_50px_rgba(16,24,40,0.14)]">
+                  <div className="premium-card absolute left-0 right-0 top-12 z-20 overflow-hidden">
                     {isSearchLoading ? (
-                      <div className="flex items-center gap-2 px-3 py-3 text-sm font-bold text-muted">
-                        <Loader2 className="animate-spin" size={16} />
-                        Searching companies
+                      <div className="grid gap-2 px-3 py-3">
+                        <SkeletonLine className="h-4 w-2/3" />
+                        <SkeletonLine className="h-3 w-1/2" />
                       </div>
                     ) : searchResults.length > 0 ? (
                       searchResults.map((result) => (
@@ -618,7 +621,7 @@ export function PortfolioDashboard() {
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-right">
-                      <Metric label="Invested" value={formatCompactCurrency(totals.invested)} />
+                      <Metric label="Cash" value={formatCompactCurrency(Math.max(0, totals.currentValue - totals.invested))} />
                       <Metric label="Holdings" value={String(holdings.length)} />
                     </div>
                   </div>
@@ -645,7 +648,7 @@ export function PortfolioDashboard() {
                 </Panel>
               </section>
 
-              <section className="grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,1.05fr)]">
+              <section className="grid gap-5">
                 <Panel className="p-5">
                   <div className="mb-4 flex items-center justify-between">
                     <div>
@@ -704,7 +707,7 @@ export function PortfolioDashboard() {
                       </Link>
                     ) : null}
                     {!canSaveStocks && !clerkEnabled ? (
-                      <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-700">
+                      <p className="rounded-lg border border-amber-300/40 bg-amber-950/40 px-3 py-2 text-xs font-bold leading-5 text-amber-100">
                         {saveRestriction}
                       </p>
                     ) : null}
@@ -846,8 +849,16 @@ export function PortfolioDashboard() {
                   {isChartLoading ? <Loader2 className="animate-spin text-muted" size={17} /> : null}
                 </div>
 
-                <PerformanceChart points={chartData?.points ?? []} fallbackValues={selectedPath} />
-                {chartError ? <p className="mt-2 text-xs font-bold text-loss">{chartError}</p> : null}
+                {isChartLoading && !chartData ? (
+                  <div className="grid h-[125px] gap-3 rounded-lg border border-[#e4ebf0] bg-[#fbfcfd] p-4">
+                    <SkeletonLine className="h-5 w-1/3" />
+                    <SkeletonLine className="h-16 w-full" />
+                    <SkeletonLine className="h-4 w-2/3" />
+                  </div>
+                ) : (
+                  <PerformanceChart points={chartData?.points ?? []} fallbackValues={selectedPath} />
+                )}
+                {chartNotice ? <p className="mt-2 text-xs font-bold text-muted">{chartNotice}</p> : null}
 
                 <div className="mt-4 grid grid-cols-3 gap-2">
                   <Metric label="Exchange" value={chartData?.exchange ?? "--"} />
@@ -870,7 +881,13 @@ export function PortfolioDashboard() {
                   {isNewsLoading ? <Loader2 className="animate-spin text-muted" size={18} /> : <Newspaper size={18} className="text-[#0f8a8a]" />}
                 </div>
                 <div className="space-y-3">
-                  {news.length > 0 ? (
+                  {isNewsLoading && news.length === 0 ? (
+                    <>
+                      <NewsSkeleton />
+                      <NewsSkeleton />
+                      <NewsSkeleton />
+                    </>
+                  ) : news.length > 0 ? (
                     news.slice(0, 4).map((item) => (
                       <a
                         key={`${item.source}-${item.title}`}
@@ -947,14 +964,14 @@ export function PortfolioDashboard() {
 }
 
 function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <section className={`rounded-lg border border-[#dfe7ec] bg-white shadow-[0_18px_50px_rgba(16,24,40,0.06)] ${className}`}>{children}</section>;
+  return <section className={`premium-card border border-[#dfe7ec] bg-white shadow-[0_18px_50px_rgba(16,24,40,0.06)] ${className}`}>{children}</section>;
 }
 
 function NavItem({ icon: Icon, label, active }: { icon: typeof LayoutDashboard; label: string; active?: boolean }) {
   return (
     <button
       className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-bold transition ${
-        active ? "bg-[#102a2c] text-white" : "text-slate-600 hover:bg-[#f4f7f9] hover:text-ink"
+        active ? "bg-[#6ee7d8]/12 text-[#6ee7d8] ring-1 ring-[#6ee7d8]/25" : "text-slate-600 hover:bg-white/[0.06] hover:text-ink"
       }`}
       type="button"
     >
@@ -966,7 +983,7 @@ function NavItem({ icon: Icon, label, active }: { icon: typeof LayoutDashboard; 
 
 function MarketPill({ label, value, change, tone }: { label: string; value: string; change: string; tone: "gain" | "loss" }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-[#dfe7ec] bg-white px-4 py-3 shadow-sm">
+    <div className="premium-card flex items-center justify-between px-4 py-3">
       <div>
         <p className="text-xs font-bold text-muted">{label}</p>
         <p className="mt-1 text-sm font-bold">{value}</p>
@@ -978,7 +995,7 @@ function MarketPill({ label, value, change, tone }: { label: string; value: stri
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-[#e4ebf0] bg-[#fbfcfd] p-3">
+    <div className="rounded-lg border border-[#e4ebf0] bg-[#fbfcfd]/80 p-3">
       <p className="text-[11px] font-bold uppercase text-muted">{label}</p>
       <p className="mt-1 truncate text-sm font-bold">{value}</p>
     </div>
@@ -992,7 +1009,7 @@ function LabeledInput(props: InputHTMLAttributes<HTMLInputElement> & { label: st
       {label}
       <input
         {...inputProps}
-        className="h-10 rounded-lg border border-[#d9e2e7] bg-white px-3 text-sm font-semibold normal-case text-ink outline-none transition placeholder:text-slate-400 focus:border-[#0f8a8a] focus:ring-4 focus:ring-[#d9f2ec]"
+        className="h-10 rounded-lg border border-[#d9e2e7] bg-white/80 px-3 text-sm font-semibold normal-case text-ink outline-none transition placeholder:text-slate-400 focus:border-[#0f8a8a] focus:ring-4 focus:ring-[#0f8a8a]/20"
       />
     </label>
   );
@@ -1003,6 +1020,23 @@ function ValueBlock({ label, value, tone }: { label: string; value: string; tone
     <div>
       <p className="text-xs font-bold uppercase text-muted">{label}</p>
       <p className={`mt-1 text-sm font-bold ${tone === "gain" ? "text-gain" : tone === "loss" ? "text-loss" : "text-ink"}`}>{value}</p>
+    </div>
+  );
+}
+
+function SkeletonLine({ className = "" }: { className?: string }) {
+  return <div className={`skeleton ${className}`} />;
+}
+
+function NewsSkeleton() {
+  return (
+    <div className="rounded-lg border border-[#e4ebf0] bg-[#fbfcfd] p-3">
+      <div className="mb-3 flex items-center justify-between">
+        <SkeletonLine className="h-3 w-16" />
+        <SkeletonLine className="h-3 w-12" />
+      </div>
+      <SkeletonLine className="h-4 w-full" />
+      <SkeletonLine className="mt-2 h-4 w-2/3" />
     </div>
   );
 }

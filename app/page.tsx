@@ -1,5 +1,5 @@
-import { PortfolioDashboard } from "@/components/portfolio-dashboard";
+import { LandingPage } from "@/components/landing-page";
 
-export default function DashboardPage() {
-  return <PortfolioDashboard />;
+export default function HomePage() {
+  return <LandingPage />;
 }

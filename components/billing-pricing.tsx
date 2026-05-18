@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ClerkLoaded, ClerkLoading, PricingTable, SignInButton, SignUpButton } from "@clerk/nextjs";
-import { Check, ChevronRight, Loader2, Sparkles } from "lucide-react";
+import { Check, ChevronRight, Sparkles } from "lucide-react";
 import { useAuthState } from "@/components/auth-state-provider";
 import { billingPlans, getBillingPlan } from "@/lib/billing-plans";
 
@@ -11,19 +11,19 @@ export function BillingPricing({ clerkEnabled }: { clerkEnabled: boolean }) {
   const currentPlan = getBillingPlan(plan);
 
   return (
-    <main className="stock-app dark-mode min-h-screen bg-[#0a1118] px-4 py-6 text-[#e6edf3] sm:px-6 lg:px-8">
+    <main className="stock-app dark-mode atlas-landing min-h-screen bg-[#05080d] px-4 py-6 text-[#e6edf3] sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
-        <header className="flex flex-col gap-4 border-b border-[#263645] pb-6 md:flex-row md:items-center md:justify-between">
+        <header className="flex flex-col gap-4 border-b border-white/10 pb-6 md:flex-row md:items-center md:justify-between">
           <div>
-            <Link href="/" className="text-sm font-black uppercase text-[#6ee7d8]">
+            <Link href="/" className="text-sm font-black uppercase text-[#6ee7d8] transition hover:text-white">
               Atlas Invest
             </Link>
-            <h1 className="mt-3 text-3xl font-semibold tracking-normal sm:text-4xl">Choose your research plan</h1>
-            <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[#9fb0c2]">
+            <h1 className="mt-3 text-4xl font-semibold tracking-normal text-white sm:text-5xl">Choose your research plan</h1>
+            <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-[#9fb0c2]">
               Start with the market dashboard, then unlock saved portfolios, analytics, alerts, and premium research tools as your workflow grows.
             </p>
           </div>
-          <div className="rounded-lg border border-[#263645] bg-[#101923] px-4 py-3">
+          <div className="premium-card px-4 py-3">
             <p className="text-xs font-bold uppercase text-[#9fb0c2]">Current plan</p>
             <p className="mt-1 text-lg font-black text-white">{currentPlan.name}</p>
           </div>
@@ -35,10 +35,10 @@ export function BillingPricing({ clerkEnabled }: { clerkEnabled: boolean }) {
             return (
               <article
                 key={billingPlan.key}
-                className={`flex min-h-[380px] flex-col rounded-lg border p-5 shadow-[0_18px_50px_rgba(0,0,0,0.24)] ${
+                className={`premium-card flex min-h-[400px] flex-col p-5 ${
                   billingPlan.highlighted
-                    ? "border-[#0f8a8a] bg-[#102a2c]"
-                    : "border-[#263645] bg-[#101923]"
+                    ? "border-[#6ee7d8]/50 bg-[#102a2c]"
+                    : "border-white/10 bg-[#101923]"
                 }`}
               >
                 <div className="mb-5 flex items-start justify-between gap-3">
@@ -64,14 +64,14 @@ export function BillingPricing({ clerkEnabled }: { clerkEnabled: boolean }) {
                   {isCurrent ? (
                     <Link
                       href="/account/billing"
-                      className="flex h-11 items-center justify-center rounded-lg border border-[#3b5366] px-4 text-sm font-black text-white transition hover:border-[#6ee7d8]"
+                      className="flex h-11 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-white transition hover:border-[#6ee7d8]/50"
                     >
                       Manage plan
                     </Link>
                   ) : clerkEnabled && isSignedIn ? (
                     <a
                       href="#clerk-pricing"
-                      className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#6ee7d8] px-4 text-sm font-black text-[#061015] transition hover:bg-[#9af5ea]"
+                      className="premium-button flex h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-black"
                     >
                       Upgrade
                       <ChevronRight size={16} />
@@ -80,7 +80,7 @@ export function BillingPricing({ clerkEnabled }: { clerkEnabled: boolean }) {
                     <SignUpButton mode="modal">
                       <button
                         type="button"
-                        className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#6ee7d8] px-4 text-sm font-black text-[#061015] transition hover:bg-[#9af5ea]"
+                        className="premium-button flex h-11 w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-black"
                       >
                         Start plan
                         <ChevronRight size={16} />
@@ -101,7 +101,7 @@ export function BillingPricing({ clerkEnabled }: { clerkEnabled: boolean }) {
           })}
         </section>
 
-        <section id="clerk-pricing" className="rounded-lg border border-[#263645] bg-[#101923] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.24)] sm:p-6">
+        <section id="clerk-pricing" className="premium-card p-4 sm:p-6">
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-black">Secure checkout</h2>
@@ -109,7 +109,7 @@ export function BillingPricing({ clerkEnabled }: { clerkEnabled: boolean }) {
             </div>
             {!isSignedIn && clerkEnabled ? (
               <SignInButton mode="modal">
-                <button type="button" className="h-10 rounded-lg border border-[#3b5366] px-4 text-sm font-black text-white">
+                  <button type="button" className="h-10 rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-white">
                   Sign in
                 </button>
               </SignInButton>
@@ -119,8 +119,13 @@ export function BillingPricing({ clerkEnabled }: { clerkEnabled: boolean }) {
           {clerkEnabled ? (
             <>
               <ClerkLoading>
-                <div className="flex min-h-48 items-center justify-center rounded-lg border border-[#263645] bg-[#0a1118]">
-                  <Loader2 className="animate-spin text-[#6ee7d8]" size={24} />
+                <div className="grid min-h-48 gap-3 rounded-lg border border-white/10 bg-[#061015] p-5">
+                  <div className="skeleton h-6 w-48" />
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="skeleton h-32" />
+                    <div className="skeleton h-32" />
+                    <div className="skeleton h-32" />
+                  </div>
                 </div>
               </ClerkLoading>
               <ClerkLoaded>
