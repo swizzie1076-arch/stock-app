@@ -18,6 +18,7 @@ import {
   WalletCards
 } from "lucide-react";
 import { AuthControls } from "@/components/auth-controls";
+import { useAuthState } from "@/components/auth-state-provider";
 
 const features = [
   { icon: LineChart, title: "Live market cockpit", detail: "Search tickers, inspect charts, quotes, and company news in one dense research view." },
@@ -39,6 +40,9 @@ const faqs = [
 ];
 
 export function LandingPage() {
+  const { clerkEnabled, isSignedIn } = useAuthState();
+  const dashboardHref = clerkEnabled && !isSignedIn ? "/sign-in?redirect_url=/portfolio" : "/portfolio";
+
   return (
     <main className="stock-app dark-mode atlas-landing min-h-screen overflow-hidden bg-[#05080d] text-[#e6edf3]">
       <header className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6 lg:px-8">
@@ -68,7 +72,7 @@ export function LandingPage() {
             Atlas Invest combines live ticker research, portfolio saves, Clerk Billing, and Convex persistence in a premium finance workspace.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Link href="/portfolio" className="premium-button inline-flex h-12 items-center justify-center gap-2 rounded-lg px-5 text-sm font-black">
+            <Link href={dashboardHref} className="premium-button inline-flex h-12 items-center justify-center gap-2 rounded-lg px-5 text-sm font-black">
               Open dashboard
               <ArrowRight size={17} />
             </Link>

@@ -157,7 +157,7 @@ const starterCompanies = [
 ];
 
 const sidebarNavItems = [
-  { href: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/portfolio", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/portfolio", icon: BriefcaseBusiness, label: "Portfolio" },
   { href: "/discover", icon: Search, label: "Discover" },
   { href: "/news", icon: Newspaper, label: "News" },
@@ -1073,7 +1073,13 @@ export function PortfolioDashboard() {
 
             <nav className="space-y-1.5">
               {sidebarNavItems.map((item) => (
-                <NavItem key={item.href} href={item.href} icon={item.icon} label={item.label} active={isActivePath(item.href)} />
+                <NavItem
+                  key={`${item.label}-${item.href}`}
+                  href={item.href}
+                  icon={item.icon}
+                  label={item.label}
+                  active={item.label === "Dashboard" ? pathname === "/portfolio" : item.href !== "/portfolio" && isActivePath(item.href)}
+                />
               ))}
             </nav>
 
