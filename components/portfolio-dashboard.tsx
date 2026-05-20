@@ -1,6 +1,6 @@
 "use client";
 
-import type { FormEvent, InputHTMLAttributes } from "react";
+import type { ChangeEvent, FormEvent, InputHTMLAttributes } from "react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -14,7 +14,10 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   ChevronRight,
+  CheckCircle2,
+  Download,
   FileText,
+  FileUp,
   Globe2,
   LayoutDashboard,
   LineChart,
@@ -31,7 +34,9 @@ import {
   Trash2,
   TrendingDown,
   TrendingUp,
-  WalletCards
+  Upload,
+  WalletCards,
+  X
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -82,6 +87,24 @@ type SearchResult = {
   companyName: string;
   exchange: string;
   sector: string | null;
+};
+
+type ImportRow = {
+  id: string;
+  sourceRow: number;
+  ticker: string;
+  companyName?: string;
+  shares: number;
+  averageBuyPrice: number;
+  sector?: string;
+  targetPrice?: number;
+  conviction?: string;
+  thesis?: string;
+};
+
+type ImportParseResult = {
+  rows: ImportRow[];
+  errors: string[];
 };
 
 type ChartPoint = {
@@ -139,6 +162,8 @@ const marketNews = [
 const portfolioPath = [38, 41, 43, 40, 46, 49, 47, 53, 57, 55, 61, 64];
 const selectedPath = [44, 46, 43, 48, 51, 49, 54, 58, 56, 61, 65, 68];
 const emptyHoldings: Holding[] = [];
+const importTemplateCsv = "ticker,company,shares,avgBuy,sector,target,conviction,thesis\nMSFT,Microsoft,10,418.50,Cloud software,525,Core holding,AI and cloud margin expansion\n";
+const importTemplateHref = `data:text/csv;charset=utf-8,${encodeURIComponent(importTemplateCsv)}`;
 
 function formatCurrency(value: number) {
   return currency.format(Number.isFinite(value) ? value : 0);
@@ -163,6 +188,145 @@ function cleanText(value: FormDataEntryValue | null) {
   return text || undefined;
 }
 
+function cleanCsvText(value: string | undefined) {
+  const text = String(value ?? "").trim();
+  return text || undefined;
+}
+
+function parseCsv(text: string) {
+  const rows: string[][] = [];
+  let current = "";
+  let row: string[] = [];
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (char === '"' && inQuotes && next === '"') {
+      current += '"';
+      index += 1;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === "," && !inQuotes) {
+      row.push(current);
+      current = "";
+    } else if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") {
+        index += 1;
+      }
+      row.push(current);
+      rows.push(row);
+      row = [];
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+
+  row.push(current);
+  rows.push(row);
+  return rows;
+}
+
+function parseRequiredNumber(value: string | undefined) {
+  const parsed = Number(String(value ?? "").trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseOptionalCsvNumber(value: string | undefined) {
+  const text = String(value ?? "").trim();
+  if (!text) return undefined;
+  const parsed = Number(text);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parsePortfolioCsv(text: string, existingTickers: string[], currentPlan: ReturnType<typeof getBillingPlan>): ImportParseResult {
+  const errors: string[] = [];
+  const parsedRows = parseCsv(text.replace(/^\uFEFF/, ""));
+  const header = parsedRows.shift()?.map((column) => column.trim()) ?? [];
+  const requiredColumns = ["ticker", "company", "shares", "avgBuy", "sector", "target", "conviction", "thesis"];
+  const headerIndex = new Map(header.map((column, index) => [column, index]));
+
+  if (header.length === 0 || header.every((column) => !column)) {
+    return { rows: [], errors: ["CSV file is empty. Use the template columns before importing."] };
+  }
+
+  for (const column of requiredColumns) {
+    if (!headerIndex.has(column)) {
+      errors.push(`Missing required column: ${column}.`);
+    }
+  }
+
+  const rows: ImportRow[] = [];
+  const existingTickerSet = new Set(existingTickers.map((ticker) => ticker.toUpperCase()));
+  const importedTickerSet = new Set<string>();
+
+  parsedRows.forEach((columns, index) => {
+    const sourceRow = index + 2;
+    const isBlank = columns.every((column) => !column.trim());
+    if (isBlank) return;
+
+    const value = (column: string) => {
+      const columnIndex = headerIndex.get(column);
+      return columnIndex === undefined ? undefined : columns[columnIndex];
+    };
+    const ticker = String(value("ticker") ?? "").trim().toUpperCase();
+    const shares = parseRequiredNumber(value("shares"));
+    const averageBuyPrice = parseRequiredNumber(value("avgBuy"));
+    const targetPrice = parseOptionalCsvNumber(value("target"));
+
+    if (!ticker) {
+      errors.push(`Row ${sourceRow}: ticker is required.`);
+    }
+    if (shares === null) {
+      errors.push(`Row ${sourceRow}: shares must be a number.`);
+    } else if (shares <= 0) {
+      errors.push(`Row ${sourceRow}: shares must be greater than 0.`);
+    }
+    if (averageBuyPrice === null) {
+      errors.push(`Row ${sourceRow}: avgBuy must be a number.`);
+    } else if (averageBuyPrice <= 0) {
+      errors.push(`Row ${sourceRow}: avgBuy must be greater than 0.`);
+    }
+    if (targetPrice === null) {
+      errors.push(`Row ${sourceRow}: target must be a number when provided.`);
+    }
+
+    if (!ticker || shares === null || shares <= 0 || averageBuyPrice === null || averageBuyPrice <= 0 || targetPrice === null) {
+      return;
+    }
+
+    rows.push({
+      id: `${sourceRow}-${ticker}`,
+      sourceRow,
+      ticker,
+      companyName: cleanCsvText(value("company")),
+      shares,
+      averageBuyPrice,
+      sector: cleanCsvText(value("sector")),
+      targetPrice,
+      conviction: cleanCsvText(value("conviction")),
+      thesis: cleanCsvText(value("thesis"))
+    });
+
+    if (!existingTickerSet.has(ticker)) {
+      importedTickerSet.add(ticker);
+    }
+  });
+
+  if (rows.length === 0 && errors.length === 0) {
+    errors.push("No valid portfolio rows found. Blank rows were ignored.");
+  }
+
+  if (currentPlan.saveLimit !== "unlimited" && existingTickerSet.size + importedTickerSet.size > currentPlan.saveLimit) {
+    const remaining = Math.max(0, currentPlan.saveLimit - existingTickerSet.size);
+    errors.push(`${currentPlan.name} can save ${currentPlan.saveLimit} stocks. This import adds ${importedTickerSet.size} new tickers, but you have room for ${remaining}.`);
+  }
+
+  return { rows, errors };
+}
+
 export function PortfolioDashboard() {
   const pathname = usePathname();
   const { clerkEnabled, isLoaded: isAuthLoaded, isSignedIn, userId, plan } = useAuthState();
@@ -183,6 +347,12 @@ export function PortfolioDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importRows, setImportRows] = useState<ImportRow[]>([]);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [importFileName, setImportFileName] = useState("");
+  const [importSuccess, setImportSuccess] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [newsError, setNewsError] = useState("");
   const [isNewsLoading, setIsNewsLoading] = useState(false);
@@ -495,6 +665,110 @@ export function PortfolioDashboard() {
     }
   }
 
+  function openImportModal() {
+    setImportErrors([]);
+    setImportRows([]);
+    setImportFileName("");
+    setImportSuccess("");
+    setIsImportOpen(true);
+  }
+
+  function closeImportModal() {
+    if (isImporting) return;
+    setIsImportOpen(false);
+  }
+
+  async function handleImportFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    setImportSuccess("");
+    setImportRows([]);
+    setImportErrors([]);
+    setImportFileName(file?.name ?? "");
+
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      setImportErrors(["Upload a CSV file using the Atlas Invest template."]);
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const result = parsePortfolioCsv(
+        text,
+        holdings.map((holding) => holding.ticker),
+        currentPlan
+      );
+      setImportRows(result.rows);
+      setImportErrors(result.errors);
+    } catch {
+      setImportErrors(["Could not read that CSV file. Try exporting it again and re-uploading."]);
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  async function confirmImport() {
+    setImportSuccess("");
+
+    if (!clerkUserId) {
+      setImportErrors(["Sign in to import stocks to your portfolio."]);
+      return;
+    }
+    if (!planCanSaveStocks) {
+      setImportErrors(["Upgrade to unlock saved stocks."]);
+      return;
+    }
+    if (importRows.length === 0) {
+      setImportErrors(["Upload a valid CSV before importing."]);
+      return;
+    }
+
+    const latestValidation = parsePortfolioCsv(
+      [
+        "ticker,company,shares,avgBuy,sector,target,conviction,thesis",
+        ...importRows.map((row) =>
+          [row.ticker, row.companyName, row.shares, row.averageBuyPrice, row.sector, row.targetPrice, row.conviction, row.thesis]
+            .map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`)
+            .join(",")
+        )
+      ].join("\n"),
+      holdings.map((holding) => holding.ticker),
+      currentPlan
+    );
+
+    if (latestValidation.errors.length > 0) {
+      setImportErrors(latestValidation.errors);
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      for (const row of importRows) {
+        await addHolding({
+          clerkUserId,
+          ticker: row.ticker,
+          companyName: row.companyName,
+          shares: row.shares,
+          averageBuyPrice: row.averageBuyPrice,
+          sector: row.sector,
+          thesis: row.thesis,
+          conviction: row.conviction,
+          targetPrice: row.targetPrice
+        });
+      }
+
+      setSelectedTicker(importRows[0]?.ticker ?? selectedTicker);
+      setImportRows([]);
+      setImportErrors([]);
+      setImportFileName("");
+      setImportSuccess(`Imported ${importRows.length} ${importRows.length === 1 ? "stock" : "stocks"} into your portfolio.`);
+    } catch (error) {
+      setImportErrors([error instanceof Error ? error.message : "Could not import portfolio."]);
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
   function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const ticker = searchTerm.trim().toUpperCase();
@@ -597,6 +871,15 @@ export function PortfolioDashboard() {
                   </div>
                 ) : null}
               </div>
+              <button
+                type="button"
+                onClick={openImportModal}
+                className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[#d9e2e7] bg-white px-3 text-sm font-bold text-[#102a2c] shadow-sm transition hover:border-[#0f8a8a]"
+              >
+                <Upload size={17} />
+                <span className="hidden sm:inline">Import Portfolio</span>
+                <span className="sm:hidden">Import</span>
+              </button>
               <button className="flex h-11 w-11 items-center justify-center rounded-lg border border-[#d9e2e7] bg-white text-slate-600 shadow-sm" aria-label="Notifications">
                 <Bell size={18} />
               </button>
@@ -673,7 +956,17 @@ export function PortfolioDashboard() {
                         {canSaveStocks ? `Saved records write to Convex. ${saveLimitLabel}.` : saveRestriction}
                       </p>
                     </div>
-                    <BookmarkPlus size={19} className="text-[#0f8a8a]" />
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={openImportModal}
+                        className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#d9e2e7] bg-white px-3 text-xs font-bold text-[#102a2c] transition hover:border-[#0f8a8a]"
+                      >
+                        <FileUp size={15} />
+                        Import CSV
+                      </button>
+                      <BookmarkPlus size={19} className="text-[#0f8a8a]" />
+                    </div>
                   </div>
 
                   <form onSubmit={handleSubmit} className="grid gap-3">
@@ -695,6 +988,12 @@ export function PortfolioDashboard() {
                     </div>
 
                     {formError ? <p className="rounded-md bg-red-50 px-3 py-2 text-sm font-bold text-loss">{formError}</p> : null}
+                    {importSuccess ? (
+                      <p className="flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm font-bold text-gain">
+                        <CheckCircle2 size={16} />
+                        {importSuccess}
+                      </p>
+                    ) : null}
 
                     <button
                       type="submit"
@@ -975,7 +1274,158 @@ export function PortfolioDashboard() {
           </div>
         </section>
       </div>
+      {isImportOpen ? (
+        <ImportPortfolioModal
+          canSaveStocks={canSaveStocks}
+          fileName={importFileName}
+          isImporting={isImporting}
+          errors={importErrors}
+          rows={importRows}
+          saveRestriction={saveRestriction}
+          onClose={closeImportModal}
+          onConfirm={confirmImport}
+          onFileChange={handleImportFileChange}
+        />
+      ) : null}
     </main>
+  );
+}
+
+function ImportPortfolioModal({
+  canSaveStocks,
+  fileName,
+  isImporting,
+  errors,
+  rows,
+  saveRestriction,
+  onClose,
+  onConfirm,
+  onFileChange
+}: {
+  canSaveStocks: boolean;
+  fileName: string;
+  isImporting: boolean;
+  errors: string[];
+  rows: ImportRow[];
+  saveRestriction: string;
+  onClose: () => void;
+  onConfirm: () => void;
+  onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
+}) {
+  const canConfirm = canSaveStocks && rows.length > 0 && errors.length === 0 && !isImporting;
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end bg-[#020407]/70 px-3 py-3 backdrop-blur-md sm:items-center sm:justify-center sm:p-6">
+      <section className="max-h-[92vh] w-full overflow-hidden rounded-2xl border border-white/10 bg-[#071016] text-white shadow-[0_30px_120px_rgba(0,0,0,0.55)] sm:max-w-3xl">
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 p-4 sm:p-5">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6ee7d8]">CSV import</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-normal">Import portfolio</h2>
+            <p className="mt-2 text-sm font-semibold leading-6 text-[#8fa1b3]">
+              Upload columns: ticker, company, shares, avgBuy, sector, target, conviction, thesis.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-[#8fa1b3] transition hover:text-white"
+            aria-label="Close import modal"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="max-h-[calc(92vh-86px)] overflow-y-auto p-4 sm:p-5">
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+            <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#6ee7d8]/35 bg-[#6ee7d8]/10 px-4 py-6 text-center transition hover:border-[#6ee7d8] hover:bg-[#6ee7d8]/14">
+              <FileUp className="mb-3 text-[#6ee7d8]" size={26} />
+              <span className="text-sm font-black">{fileName || "Choose a CSV file"}</span>
+              <span className="mt-1 text-xs font-semibold text-[#8fa1b3]">Blank rows are ignored. Errors appear before import.</span>
+              <input type="file" accept=".csv,text/csv" className="sr-only" onChange={onFileChange} />
+            </label>
+            <a
+              href={importTemplateHref}
+              download="atlas-portfolio-template.csv"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-4 text-sm font-black text-white transition hover:border-[#6ee7d8]/40"
+            >
+              <Download size={16} />
+              Template
+            </a>
+          </div>
+
+          {!canSaveStocks ? (
+            <p className="mt-4 rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-sm font-bold text-amber-100">{saveRestriction}</p>
+          ) : null}
+
+          {errors.length > 0 ? (
+            <div className="mt-4 rounded-xl border border-red-400/30 bg-red-500/10 p-4">
+              <p className="text-sm font-black text-red-100">Fix these before importing:</p>
+              <ul className="mt-2 space-y-1 text-sm font-semibold leading-6 text-red-100/90">
+                {errors.map((error) => (
+                  <li key={error}>{error}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <div className="mt-5 overflow-hidden rounded-xl border border-white/10">
+            <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.04] px-4 py-3">
+              <h3 className="text-sm font-black">Preview</h3>
+              <span className="text-xs font-bold text-[#8fa1b3]">{rows.length} valid rows</span>
+            </div>
+            {rows.length > 0 ? (
+              <div className="max-h-72 overflow-auto">
+                <table className="min-w-[720px] w-full text-left text-sm">
+                  <thead className="sticky top-0 bg-[#0a141b] text-xs uppercase text-[#8fa1b3]">
+                    <tr>
+                      <th className="px-4 py-3">Ticker</th>
+                      <th className="px-4 py-3">Company</th>
+                      <th className="px-4 py-3">Shares</th>
+                      <th className="px-4 py-3">Avg Buy</th>
+                      <th className="px-4 py-3">Sector</th>
+                      <th className="px-4 py-3">Target</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/10">
+                    {rows.map((row) => (
+                      <tr key={row.id} className="bg-white/[0.02]">
+                        <td className="px-4 py-3 font-black text-[#6ee7d8]">{row.ticker}</td>
+                        <td className="px-4 py-3 font-semibold">{row.companyName ?? row.ticker}</td>
+                        <td className="px-4 py-3 font-semibold">{number.format(row.shares)}</td>
+                        <td className="px-4 py-3 font-semibold">{formatCurrency(row.averageBuyPrice)}</td>
+                        <td className="px-4 py-3 font-semibold text-[#8fa1b3]">{row.sector ?? "--"}</td>
+                        <td className="px-4 py-3 font-semibold text-[#8fa1b3]">{row.targetPrice ? formatCurrency(row.targetPrice) : "--"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-5 text-sm font-semibold leading-6 text-[#8fa1b3]">Upload a CSV to preview validated rows before they are saved.</div>
+            )}
+          </div>
+
+          <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-11 rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-white transition hover:bg-white/[0.08]"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={!canConfirm}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#6ee7d8] px-4 text-sm font-black text-[#061012] transition hover:bg-[#8df3e8] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isImporting ? <Loader2 className="animate-spin" size={17} /> : <Upload size={17} />}
+              Confirm import
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }
 
