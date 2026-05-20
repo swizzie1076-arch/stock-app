@@ -1278,7 +1278,7 @@ export function PortfolioDashboard() {
                       {canSaveStocks ? "Save to portfolio" : isSignedIn ? "Upgrade to save" : "Sign in to save"}
                     </button>
                     {!canSaveStocks && clerkEnabled && !isSignedIn ? (
-                      <SignInButton mode="modal">
+                      <SignInButton mode="modal" fallbackRedirectUrl="/portfolio" forceRedirectUrl="/portfolio">
                         <button
                           type="button"
                           className="flex h-10 items-center justify-center rounded-lg border border-[#d9e2e7] bg-white px-4 text-sm font-bold text-[#102a2c] transition hover:border-[#0f8a8a]"

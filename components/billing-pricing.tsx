@@ -77,7 +77,7 @@ export function BillingPricing({ clerkEnabled }: { clerkEnabled: boolean }) {
                       <ChevronRight size={16} />
                     </a>
                   ) : clerkEnabled ? (
-                    <SignUpButton mode="modal">
+                    <SignUpButton mode="modal" fallbackRedirectUrl="/portfolio" forceRedirectUrl="/portfolio">
                       <button
                         type="button"
                         className="premium-button flex h-11 w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-black"
@@ -108,7 +108,7 @@ export function BillingPricing({ clerkEnabled }: { clerkEnabled: boolean }) {
               <p className="mt-1 text-sm font-semibold text-[#9fb0c2]">Plans and payments are managed by Clerk Billing.</p>
             </div>
             {!isSignedIn && clerkEnabled ? (
-              <SignInButton mode="modal">
+              <SignInButton mode="modal" fallbackRedirectUrl="/portfolio" forceRedirectUrl="/portfolio">
                   <button type="button" className="h-10 rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-black text-white">
                   Sign in
                 </button>

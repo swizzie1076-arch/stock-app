@@ -10,7 +10,7 @@ export function ClerkSignInCard() {
         <AuthCardLoader />
       </ClerkLoading>
       <ClerkLoaded>
-        <SignIn routing="path" path="/sign-in" signUpUrl="/sign-up" fallbackRedirectUrl="/" />
+        <SignIn routing="path" path="/sign-in" signUpUrl="/sign-up" fallbackRedirectUrl="/portfolio" forceRedirectUrl="/portfolio" />
       </ClerkLoaded>
     </>
   );
@@ -23,7 +23,7 @@ export function ClerkSignUpCard() {
         <AuthCardLoader />
       </ClerkLoading>
       <ClerkLoaded>
-        <SignUp routing="path" path="/sign-up" signInUrl="/sign-in" fallbackRedirectUrl="/" />
+        <SignUp routing="path" path="/sign-up" signInUrl="/sign-in" fallbackRedirectUrl="/portfolio" forceRedirectUrl="/portfolio" />
       </ClerkLoaded>
     </>
   );

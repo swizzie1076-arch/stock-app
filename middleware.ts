@@ -11,7 +11,9 @@ const middleware = clerkClientConfigured
         try {
           await auth.protect();
         } catch {
-          return NextResponse.redirect(new URL("/sign-in", req.url));
+          const signInUrl = new URL("/sign-in", req.url);
+          signInUrl.searchParams.set("redirect_url", req.nextUrl.pathname);
+          return NextResponse.redirect(signInUrl);
         }
       }
     })

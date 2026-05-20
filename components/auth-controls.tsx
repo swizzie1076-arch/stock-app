@@ -51,7 +51,7 @@ function ClerkAuthControls() {
           </div>
         ) : (
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
-            <SignInButton mode="modal">
+            <SignInButton mode="modal" fallbackRedirectUrl="/portfolio" forceRedirectUrl="/portfolio">
               <button
                 type="button"
                 className="flex h-11 items-center justify-center rounded-lg border border-[#d9e2e7] bg-white px-3 text-sm font-bold text-[#102a2c] shadow-sm transition hover:border-[#0f8a8a]"
@@ -59,7 +59,7 @@ function ClerkAuthControls() {
                 Sign In
               </button>
             </SignInButton>
-            <SignUpButton mode="modal">
+            <SignUpButton mode="modal" fallbackRedirectUrl="/portfolio" forceRedirectUrl="/portfolio">
               <button
                 type="button"
                 className="flex h-11 items-center justify-center rounded-lg bg-[#102a2c] px-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#173b3e]"

@@ -58,6 +58,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             publishableKey={clerkPublishableKey}
             signInUrl="/sign-in"
             signUpUrl="/sign-up"
+            signInFallbackRedirectUrl="/portfolio"
+            signUpFallbackRedirectUrl="/portfolio"
+            signInForceRedirectUrl="/portfolio"
+            signUpForceRedirectUrl="/portfolio"
             appearance={{
               variables: {
                 colorPrimary: "#0f8a8a",
