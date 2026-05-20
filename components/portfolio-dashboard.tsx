@@ -95,17 +95,28 @@ type ImportRow = {
   ticker: string;
   companyName?: string;
   shares: number;
-  averageBuyPrice: number;
+  averageBuyPrice?: number;
   sector?: string;
   targetPrice?: number;
   conviction?: string;
   thesis?: string;
+  skipped?: boolean;
+  skipReason?: string;
 };
 
 type ImportParseResult = {
   rows: ImportRow[];
   errors: string[];
+  warnings: string[];
+  headers: string[];
+  mapping: ImportColumnMapping;
+  unmappedColumns: string[];
+  skippedRows: number;
 };
+
+type BrokerKey = "generic" | "robinhood" | "fidelity" | "schwab" | "etrade" | "webull" | "coinbase";
+type AtlasImportField = "ticker" | "company" | "shares" | "avgBuy" | "sector" | "target" | "conviction" | "thesis";
+type ImportColumnMapping = Partial<Record<AtlasImportField, string>>;
 
 type ChartPoint = {
   date: string;
@@ -162,8 +173,95 @@ const marketNews = [
 const portfolioPath = [38, 41, 43, 40, 46, 49, 47, 53, 57, 55, 61, 64];
 const selectedPath = [44, 46, 43, 48, 51, 49, 54, 58, 56, 61, 65, 68];
 const emptyHoldings: Holding[] = [];
-const importTemplateCsv = "ticker,company,shares,avgBuy,sector,target,conviction,thesis\nMSFT,Microsoft,10,418.50,Cloud software,525,Core holding,AI and cloud margin expansion\n";
-const importTemplateHref = `data:text/csv;charset=utf-8,${encodeURIComponent(importTemplateCsv)}`;
+const atlasImportFields: { key: AtlasImportField; label: string; required?: boolean }[] = [
+  { key: "ticker", label: "Ticker", required: true },
+  { key: "company", label: "Company" },
+  { key: "shares", label: "Shares", required: true },
+  { key: "avgBuy", label: "Avg buy", required: true },
+  { key: "sector", label: "Sector" },
+  { key: "target", label: "Target" },
+  { key: "conviction", label: "Conviction" },
+  { key: "thesis", label: "Thesis" }
+];
+const brokerOptions: { key: BrokerKey; label: string; template: string }[] = [
+  {
+    key: "generic",
+    label: "Generic CSV",
+    template: "ticker,company,shares,avgBuy,sector,target,conviction,thesis\nMSFT,Microsoft,10,418.50,Cloud software,525,Core holding,AI and cloud margin expansion\n"
+  },
+  {
+    key: "robinhood",
+    label: "Robinhood",
+    template: "Symbol,Name,Quantity,Average Cost,Instrument\nMSFT,Microsoft Corp,10,418.50,Stock\n"
+  },
+  {
+    key: "fidelity",
+    label: "Fidelity",
+    template: "Symbol,Description,Quantity,Cost Basis Per Share,Asset Class\nMSFT,Microsoft Corp,10,418.50,Equity\n"
+  },
+  {
+    key: "schwab",
+    label: "Schwab",
+    template: "Symbol,Security Name,Shares,Cost Basis / Share,Type\nMSFT,Microsoft Corp,10,418.50,Equity\n"
+  },
+  {
+    key: "etrade",
+    label: "E*TRADE",
+    template: "Symbol,Description,Quantity,Purchase Price,Security Type\nMSFT,Microsoft Corp,10,418.50,Stock\n"
+  },
+  {
+    key: "webull",
+    label: "Webull",
+    template: "Symbol,Name,Quantity,Avg Cost,Asset Type\nMSFT,Microsoft Corp,10,418.50,Stock\n"
+  },
+  {
+    key: "coinbase",
+    label: "Coinbase",
+    template: "Currency,Name,Amount,Average Cost\nBTC,Bitcoin,0.25,65000\n"
+  }
+];
+const defaultFieldAliases: Record<AtlasImportField, string[]> = {
+  ticker: ["ticker", "symbol", "asset", "instrument", "currency"],
+  company: ["company", "name", "description", "security name"],
+  shares: ["shares", "quantity", "units", "amount"],
+  avgBuy: ["avgbuy", "avg buy", "average cost", "avg cost", "cost basis / share", "cost basis per share", "purchase price"],
+  sector: ["sector", "asset class", "asset type", "type", "security type", "instrument type"],
+  target: ["target", "target price", "price target"],
+  conviction: ["conviction", "rating", "tag"],
+  thesis: ["thesis", "notes", "memo"]
+};
+const brokerFieldAliases: Record<BrokerKey, Partial<Record<AtlasImportField, string[]>>> = {
+  generic: {},
+  robinhood: {
+    ticker: ["symbol"],
+    company: ["name"],
+    shares: ["quantity"],
+    avgBuy: ["average cost"]
+  },
+  fidelity: {
+    company: ["description"],
+    avgBuy: ["cost basis per share"]
+  },
+  schwab: {
+    company: ["security name"],
+    avgBuy: ["cost basis / share"]
+  },
+  etrade: {
+    company: ["description"],
+    avgBuy: ["purchase price"]
+  },
+  webull: {
+    company: ["name"],
+    avgBuy: ["avg cost"]
+  },
+  coinbase: {
+    ticker: ["currency", "asset"],
+    company: ["name", "currency"],
+    shares: ["amount", "quantity"],
+    avgBuy: ["average cost", "avg cost"]
+  }
+};
+const cashLikeTerms = ["cash", "money market", "sweep", "usd cash", "spaxx", "fdrxx", "vmfxx", "core position"];
 
 function formatCurrency(value: number) {
   return currency.format(Number.isFinite(value) ? value : 0);
@@ -229,52 +327,128 @@ function parseCsv(text: string) {
   return rows;
 }
 
-function parseRequiredNumber(value: string | undefined) {
-  const parsed = Number(String(value ?? "").trim());
-  return Number.isFinite(parsed) ? parsed : null;
+function normalizeImportHeader(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function getBrokerTemplate(broker: BrokerKey) {
+  return brokerOptions.find((option) => option.key === broker) ?? brokerOptions[0];
+}
+
+function getBrokerTemplateHref(broker: BrokerKey) {
+  return `data:text/csv;charset=utf-8,${encodeURIComponent(getBrokerTemplate(broker).template)}`;
+}
+
+function parseCsvNumber(value: string | undefined) {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const isNegative = text.startsWith("(") && text.endsWith(")");
+  const normalized = text.replace(/[,$%]/g, "").replace(/[()]/g, "").trim();
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) return null;
+  return isNegative ? -parsed : parsed;
 }
 
 function parseOptionalCsvNumber(value: string | undefined) {
   const text = String(value ?? "").trim();
   if (!text) return undefined;
-  const parsed = Number(text);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  const parsed = parseCsvNumber(text);
+  return parsed === null ? null : parsed > 0 ? parsed : null;
 }
 
-function parsePortfolioCsv(text: string, existingTickers: string[], currentPlan: ReturnType<typeof getBillingPlan>): ImportParseResult {
-  const errors: string[] = [];
-  const parsedRows = parseCsv(text.replace(/^\uFEFF/, ""));
-  const header = parsedRows.shift()?.map((column) => column.trim()) ?? [];
-  const requiredColumns = ["ticker", "company", "shares", "avgBuy", "sector", "target", "conviction", "thesis"];
-  const headerIndex = new Map(header.map((column, index) => [column, index]));
+function autoMapColumns(headers: string[], broker: BrokerKey): ImportColumnMapping {
+  const normalizedHeaders = new Map(headers.map((header) => [normalizeImportHeader(header), header]));
+  const mapping: ImportColumnMapping = {};
 
-  if (header.length === 0 || header.every((column) => !column)) {
-    return { rows: [], errors: ["CSV file is empty. Use the template columns before importing."] };
-  }
-
-  for (const column of requiredColumns) {
-    if (!headerIndex.has(column)) {
-      errors.push(`Missing required column: ${column}.`);
+  for (const field of atlasImportFields) {
+    const aliases = [...(brokerFieldAliases[broker][field.key] ?? []), ...defaultFieldAliases[field.key]];
+    const match = aliases.map(normalizeImportHeader).find((alias) => normalizedHeaders.has(alias));
+    if (match) {
+      mapping[field.key] = normalizedHeaders.get(match);
     }
   }
 
+  return mapping;
+}
+
+function mergeColumnMapping(autoMapping: ImportColumnMapping, overrides: ImportColumnMapping): ImportColumnMapping {
+  const merged: ImportColumnMapping = { ...autoMapping };
+  for (const field of atlasImportFields) {
+    if (Object.prototype.hasOwnProperty.call(overrides, field.key)) {
+      const value = overrides[field.key];
+      if (value) {
+        merged[field.key] = value;
+      } else {
+        delete merged[field.key];
+      }
+    }
+  }
+  return merged;
+}
+
+function isCashLikeRow(ticker: string, companyName?: string, sector?: string) {
+  const haystack = [ticker, companyName, sector].filter(Boolean).join(" ").toLowerCase();
+  return cashLikeTerms.some((term) => haystack.includes(term));
+}
+
+function parsePortfolioCsv(
+  text: string,
+  broker: BrokerKey,
+  existingTickers: string[],
+  currentPlan: ReturnType<typeof getBillingPlan>,
+  includeCashRows: boolean,
+  mappingOverrides: ImportColumnMapping = {}
+): ImportParseResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const parsedRows = parseCsv(text.replace(/^\uFEFF/, ""));
+  const header = parsedRows.shift()?.map((column) => column.trim()) ?? [];
+
+  if (header.length === 0 || header.every((column) => !column)) {
+    return {
+      rows: [],
+      errors: ["CSV file is empty. Use a broker template before importing."],
+      warnings: [],
+      headers: [],
+      mapping: {},
+      unmappedColumns: [],
+      skippedRows: 0
+    };
+  }
+
+  const autoMapping = autoMapColumns(header, broker);
+  const mapping = mergeColumnMapping(autoMapping, mappingOverrides);
+  const headerIndex = new Map(header.map((column, index) => [column, index]));
+  const mappedColumns = new Set(Object.values(mapping).filter(Boolean).map((column) => normalizeImportHeader(column)));
+  const unmappedColumns = header.filter((column) => column && !mappedColumns.has(normalizeImportHeader(column)));
   const rows: ImportRow[] = [];
   const existingTickerSet = new Set(existingTickers.map((ticker) => ticker.toUpperCase()));
   const importedTickerSet = new Set<string>();
+  let skippedRows = 0;
+
+  if (!mapping.ticker) errors.push("Map a ticker column before importing.");
+  if (!mapping.shares) errors.push("Map a shares column before importing.");
+  if (!mapping.avgBuy) errors.push("Map an avgBuy column before importing. Broker exports without cost basis need a manual mapping before save.");
+  if (unmappedColumns.length > 0) {
+    warnings.push(`Unmapped columns: ${unmappedColumns.join(", ")}.`);
+  }
 
   parsedRows.forEach((columns, index) => {
     const sourceRow = index + 2;
     const isBlank = columns.every((column) => !column.trim());
     if (isBlank) return;
 
-    const value = (column: string) => {
-      const columnIndex = headerIndex.get(column);
+    const value = (field: AtlasImportField) => {
+      const column = mapping[field];
+      const columnIndex = column ? headerIndex.get(column) : undefined;
       return columnIndex === undefined ? undefined : columns[columnIndex];
     };
     const ticker = String(value("ticker") ?? "").trim().toUpperCase();
-    const shares = parseRequiredNumber(value("shares"));
-    const averageBuyPrice = parseRequiredNumber(value("avgBuy"));
+    const companyName = cleanCsvText(value("company")) ?? (broker === "coinbase" && ticker ? ticker : undefined);
+    const shares = parseCsvNumber(value("shares"));
+    const averageBuyPrice = parseCsvNumber(value("avgBuy"));
     const targetPrice = parseOptionalCsvNumber(value("target"));
+    const sector = cleanCsvText(value("sector"));
 
     if (!ticker) {
       errors.push(`Row ${sourceRow}: ticker is required.`);
@@ -285,7 +459,7 @@ function parsePortfolioCsv(text: string, existingTickers: string[], currentPlan:
       errors.push(`Row ${sourceRow}: shares must be greater than 0.`);
     }
     if (averageBuyPrice === null) {
-      errors.push(`Row ${sourceRow}: avgBuy must be a number.`);
+      errors.push(`Row ${sourceRow}: avgBuy is required before saving. Map a broker cost-basis column or use a template with avgBuy.`);
     } else if (averageBuyPrice <= 0) {
       errors.push(`Row ${sourceRow}: avgBuy must be greater than 0.`);
     }
@@ -293,7 +467,12 @@ function parsePortfolioCsv(text: string, existingTickers: string[], currentPlan:
       errors.push(`Row ${sourceRow}: target must be a number when provided.`);
     }
 
-    if (!ticker || shares === null || shares <= 0 || averageBuyPrice === null || averageBuyPrice <= 0 || targetPrice === null) {
+    if (ticker && isCashLikeRow(ticker, companyName, sector) && !includeCashRows) {
+      skippedRows += 1;
+      return;
+    }
+
+    if (!ticker || shares === null || shares <= 0 || targetPrice === null) {
       return;
     }
 
@@ -301,10 +480,10 @@ function parsePortfolioCsv(text: string, existingTickers: string[], currentPlan:
       id: `${sourceRow}-${ticker}`,
       sourceRow,
       ticker,
-      companyName: cleanCsvText(value("company")),
+      companyName,
       shares,
-      averageBuyPrice,
-      sector: cleanCsvText(value("sector")),
+      averageBuyPrice: averageBuyPrice && averageBuyPrice > 0 ? averageBuyPrice : undefined,
+      sector,
       targetPrice,
       conviction: cleanCsvText(value("conviction")),
       thesis: cleanCsvText(value("thesis"))
@@ -318,13 +497,16 @@ function parsePortfolioCsv(text: string, existingTickers: string[], currentPlan:
   if (rows.length === 0 && errors.length === 0) {
     errors.push("No valid portfolio rows found. Blank rows were ignored.");
   }
+  if (skippedRows > 0) {
+    warnings.push(`${skippedRows} cash or money market ${skippedRows === 1 ? "row was" : "rows were"} skipped.`);
+  }
 
   if (currentPlan.saveLimit !== "unlimited" && existingTickerSet.size + importedTickerSet.size > currentPlan.saveLimit) {
     const remaining = Math.max(0, currentPlan.saveLimit - existingTickerSet.size);
     errors.push(`${currentPlan.name} can save ${currentPlan.saveLimit} stocks. This import adds ${importedTickerSet.size} new tickers, but you have room for ${remaining}.`);
   }
 
-  return { rows, errors };
+  return { rows, errors, warnings, headers: header, mapping, unmappedColumns, skippedRows };
 }
 
 export function PortfolioDashboard() {
@@ -348,8 +530,15 @@ export function PortfolioDashboard() {
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importBroker, setImportBroker] = useState<BrokerKey>("generic");
+  const [includeCashRows, setIncludeCashRows] = useState(false);
+  const [importRawCsv, setImportRawCsv] = useState("");
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
   const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
+  const [importHeaders, setImportHeaders] = useState<string[]>([]);
+  const [importMapping, setImportMapping] = useState<ImportColumnMapping>({});
+  const [importUnmappedColumns, setImportUnmappedColumns] = useState<string[]>([]);
   const [importFileName, setImportFileName] = useState("");
   const [importSuccess, setImportSuccess] = useState("");
   const [isImporting, setIsImporting] = useState(false);
@@ -667,9 +856,15 @@ export function PortfolioDashboard() {
 
   function openImportModal() {
     setImportErrors([]);
+    setImportWarnings([]);
     setImportRows([]);
+    setImportHeaders([]);
+    setImportMapping({});
+    setImportUnmappedColumns([]);
+    setImportRawCsv("");
     setImportFileName("");
     setImportSuccess("");
+    setIncludeCashRows(false);
     setIsImportOpen(true);
   }
 
@@ -678,28 +873,93 @@ export function PortfolioDashboard() {
     setIsImportOpen(false);
   }
 
+  function applyImportParseResult(result: ImportParseResult) {
+    setImportRows(result.rows);
+    setImportErrors(result.errors);
+    setImportWarnings(result.warnings);
+    setImportHeaders(result.headers);
+    setImportMapping(result.mapping);
+    setImportUnmappedColumns(result.unmappedColumns);
+  }
+
+  function reparseImportCsv(nextBroker: BrokerKey, nextIncludeCashRows: boolean, nextMapping: ImportColumnMapping) {
+    if (!importRawCsv) return;
+    const result = parsePortfolioCsv(
+      importRawCsv,
+      nextBroker,
+      holdings.map((holding) => holding.ticker),
+      currentPlan,
+      nextIncludeCashRows,
+      nextMapping
+    );
+    applyImportParseResult(result);
+  }
+
+  function handleImportBrokerChange(event: ChangeEvent<HTMLSelectElement>) {
+    const nextBroker = event.target.value as BrokerKey;
+    setImportBroker(nextBroker);
+    setImportSuccess("");
+    if (importRawCsv) {
+      const result = parsePortfolioCsv(
+        importRawCsv,
+        nextBroker,
+        holdings.map((holding) => holding.ticker),
+        currentPlan,
+        includeCashRows
+      );
+      applyImportParseResult(result);
+    } else {
+      setImportMapping({});
+      setImportHeaders([]);
+      setImportUnmappedColumns([]);
+      setImportWarnings([]);
+      setImportErrors([]);
+      setImportRows([]);
+    }
+  }
+
+  function handleIncludeCashRowsChange(event: ChangeEvent<HTMLInputElement>) {
+    const nextIncludeCashRows = event.target.checked;
+    setIncludeCashRows(nextIncludeCashRows);
+    setImportSuccess("");
+    reparseImportCsv(importBroker, nextIncludeCashRows, importMapping);
+  }
+
+  function handleImportMappingChange(field: AtlasImportField, column: string) {
+    const nextMapping: ImportColumnMapping = { ...importMapping, [field]: column || undefined };
+    setImportSuccess("");
+    reparseImportCsv(importBroker, includeCashRows, nextMapping);
+  }
+
   async function handleImportFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     setImportSuccess("");
     setImportRows([]);
     setImportErrors([]);
+    setImportWarnings([]);
+    setImportHeaders([]);
+    setImportMapping({});
+    setImportUnmappedColumns([]);
+    setImportRawCsv("");
     setImportFileName(file?.name ?? "");
 
     if (!file) return;
     if (!file.name.toLowerCase().endsWith(".csv")) {
-      setImportErrors(["Upload a CSV file using the Atlas Invest template."]);
+      setImportErrors(["Upload a CSV file using an Atlas or broker template."]);
       return;
     }
 
     try {
       const text = await file.text();
+      setImportRawCsv(text);
       const result = parsePortfolioCsv(
         text,
+        importBroker,
         holdings.map((holding) => holding.ticker),
-        currentPlan
+        currentPlan,
+        includeCashRows
       );
-      setImportRows(result.rows);
-      setImportErrors(result.errors);
+      applyImportParseResult(result);
     } catch {
       setImportErrors(["Could not read that CSV file. Try exporting it again and re-uploading."]);
     } finally {
@@ -723,27 +983,30 @@ export function PortfolioDashboard() {
       return;
     }
 
-    const latestValidation = parsePortfolioCsv(
-      [
-        "ticker,company,shares,avgBuy,sector,target,conviction,thesis",
-        ...importRows.map((row) =>
-          [row.ticker, row.companyName, row.shares, row.averageBuyPrice, row.sector, row.targetPrice, row.conviction, row.thesis]
-            .map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`)
-            .join(",")
+    const latestValidation = importRawCsv
+      ? parsePortfolioCsv(
+          importRawCsv,
+          importBroker,
+          holdings.map((holding) => holding.ticker),
+          currentPlan,
+          includeCashRows,
+          importMapping
         )
-      ].join("\n"),
-      holdings.map((holding) => holding.ticker),
-      currentPlan
-    );
+      : { rows: importRows, errors: importErrors, warnings: importWarnings, headers: importHeaders, mapping: importMapping, unmappedColumns: importUnmappedColumns, skippedRows: 0 };
 
     if (latestValidation.errors.length > 0) {
-      setImportErrors(latestValidation.errors);
+      applyImportParseResult(latestValidation);
+      return;
+    }
+    if (latestValidation.rows.some((row) => row.averageBuyPrice === undefined)) {
+      setImportErrors(["Every imported row needs avgBuy before saving. Map the broker cost-basis column or use a template with avgBuy."]);
       return;
     }
 
     setIsImporting(true);
     try {
-      for (const row of importRows) {
+      for (const row of latestValidation.rows) {
+        if (row.averageBuyPrice === undefined) continue;
         await addHolding({
           clerkUserId,
           ticker: row.ticker,
@@ -757,11 +1020,16 @@ export function PortfolioDashboard() {
         });
       }
 
-      setSelectedTicker(importRows[0]?.ticker ?? selectedTicker);
+      setSelectedTicker(latestValidation.rows[0]?.ticker ?? selectedTicker);
       setImportRows([]);
       setImportErrors([]);
+      setImportWarnings([]);
+      setImportHeaders([]);
+      setImportMapping({});
+      setImportUnmappedColumns([]);
+      setImportRawCsv("");
       setImportFileName("");
-      setImportSuccess(`Imported ${importRows.length} ${importRows.length === 1 ? "stock" : "stocks"} into your portfolio.`);
+      setImportSuccess(`Imported ${latestValidation.rows.length} ${latestValidation.rows.length === 1 ? "stock" : "stocks"} into your portfolio.`);
     } catch (error) {
       setImportErrors([error instanceof Error ? error.message : "Could not import portfolio."]);
     } finally {
@@ -1276,15 +1544,24 @@ export function PortfolioDashboard() {
       </div>
       {isImportOpen ? (
         <ImportPortfolioModal
+          broker={importBroker}
           canSaveStocks={canSaveStocks}
           fileName={importFileName}
+          headers={importHeaders}
+          includeCashRows={includeCashRows}
           isImporting={isImporting}
+          mapping={importMapping}
           errors={importErrors}
+          warnings={importWarnings}
           rows={importRows}
           saveRestriction={saveRestriction}
+          unmappedColumns={importUnmappedColumns}
+          onBrokerChange={handleImportBrokerChange}
           onClose={closeImportModal}
           onConfirm={confirmImport}
           onFileChange={handleImportFileChange}
+          onIncludeCashRowsChange={handleIncludeCashRowsChange}
+          onMappingChange={handleImportMappingChange}
         />
       ) : null}
     </main>
@@ -1292,37 +1569,55 @@ export function PortfolioDashboard() {
 }
 
 function ImportPortfolioModal({
+  broker,
   canSaveStocks,
   fileName,
+  headers,
+  includeCashRows,
   isImporting,
+  mapping,
   errors,
+  warnings,
   rows,
   saveRestriction,
+  unmappedColumns,
+  onBrokerChange,
   onClose,
   onConfirm,
-  onFileChange
+  onFileChange,
+  onIncludeCashRowsChange,
+  onMappingChange
 }: {
+  broker: BrokerKey;
   canSaveStocks: boolean;
   fileName: string;
+  headers: string[];
+  includeCashRows: boolean;
   isImporting: boolean;
+  mapping: ImportColumnMapping;
   errors: string[];
+  warnings: string[];
   rows: ImportRow[];
   saveRestriction: string;
+  unmappedColumns: string[];
+  onBrokerChange: (event: ChangeEvent<HTMLSelectElement>) => void;
   onClose: () => void;
   onConfirm: () => void;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onIncludeCashRowsChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onMappingChange: (field: AtlasImportField, column: string) => void;
 }) {
   const canConfirm = canSaveStocks && rows.length > 0 && errors.length === 0 && !isImporting;
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end bg-[#020407]/70 px-3 py-3 backdrop-blur-md sm:items-center sm:justify-center sm:p-6">
-      <section className="max-h-[92vh] w-full overflow-hidden rounded-2xl border border-white/10 bg-[#071016] text-white shadow-[0_30px_120px_rgba(0,0,0,0.55)] sm:max-w-3xl">
+      <section className="max-h-[92vh] w-full overflow-hidden rounded-2xl border border-white/10 bg-[#071016] text-white shadow-[0_30px_120px_rgba(0,0,0,0.55)] sm:max-w-5xl">
         <div className="flex items-start justify-between gap-4 border-b border-white/10 p-4 sm:p-5">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6ee7d8]">CSV import</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-normal">Import portfolio</h2>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6ee7d8]">Broker CSV import</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-normal">Import broker portfolio</h2>
             <p className="mt-2 text-sm font-semibold leading-6 text-[#8fa1b3]">
-              Upload columns: ticker, company, shares, avgBuy, sector, target, conviction, thesis.
+              Pick a broker, upload a CSV, review mapped columns, then confirm the rows to save.
             </p>
           </div>
           <button
@@ -1336,16 +1631,30 @@ function ImportPortfolioModal({
         </div>
 
         <div className="max-h-[calc(92vh-86px)] overflow-y-auto p-4 sm:p-5">
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+          <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)_auto] lg:items-end">
+            <label className="grid gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#8fa1b3]">
+              Broker
+              <select
+                value={broker}
+                onChange={onBrokerChange}
+                className="h-11 rounded-lg border border-white/10 bg-[#0a141b] px-3 text-sm font-black normal-case tracking-normal text-white outline-none focus:border-[#6ee7d8]"
+              >
+                {brokerOptions.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#6ee7d8]/35 bg-[#6ee7d8]/10 px-4 py-6 text-center transition hover:border-[#6ee7d8] hover:bg-[#6ee7d8]/14">
               <FileUp className="mb-3 text-[#6ee7d8]" size={26} />
               <span className="text-sm font-black">{fileName || "Choose a CSV file"}</span>
-              <span className="mt-1 text-xs font-semibold text-[#8fa1b3]">Blank rows are ignored. Errors appear before import.</span>
+              <span className="mt-1 text-xs font-semibold text-[#8fa1b3]">Auto-maps broker headers. Blank rows are ignored.</span>
               <input type="file" accept=".csv,text/csv" className="sr-only" onChange={onFileChange} />
             </label>
             <a
-              href={importTemplateHref}
-              download="atlas-portfolio-template.csv"
+              href={getBrokerTemplateHref(broker)}
+              download={`atlas-${broker}-portfolio-template.csv`}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-4 text-sm font-black text-white transition hover:border-[#6ee7d8]/40"
             >
               <Download size={16} />
@@ -1353,8 +1662,68 @@ function ImportPortfolioModal({
             </a>
           </div>
 
+          <label className="mt-4 flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.035] p-3 text-sm font-bold text-[#c5d2df]">
+            <input
+              type="checkbox"
+              checked={includeCashRows}
+              onChange={onIncludeCashRowsChange}
+              className="mt-1 h-4 w-4 rounded border-white/20 bg-[#0a141b] accent-[#6ee7d8]"
+            />
+            <span>
+              Include cash-like rows
+              <span className="mt-1 block text-xs font-semibold text-[#8fa1b3]">
+                Off by default. Skips cash, sweep, money market, SPAXX, FDRXX, VMFXX, and similar rows.
+              </span>
+            </span>
+          </label>
+
           {!canSaveStocks ? (
             <p className="mt-4 rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-sm font-bold text-amber-100">{saveRestriction}</p>
+          ) : null}
+
+          {headers.length > 0 ? (
+            <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.035] p-4">
+              <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-black">Column mapping</h3>
+                  <p className="mt-1 text-xs font-semibold text-[#8fa1b3]">Adjust any field that Atlas did not detect correctly.</p>
+                </div>
+                {unmappedColumns.length > 0 ? (
+                  <span className="text-xs font-bold text-amber-100">{unmappedColumns.length} unmapped</span>
+                ) : null}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {atlasImportFields.map((field) => (
+                  <label key={field.key} className="grid gap-1.5 text-xs font-black uppercase tracking-[0.12em] text-[#8fa1b3]">
+                    {field.label}
+                    {field.required ? <span className="sr-only">required</span> : null}
+                    <select
+                      value={mapping[field.key] ?? ""}
+                      onChange={(event) => onMappingChange(field.key, event.target.value)}
+                      className="h-10 rounded-lg border border-white/10 bg-[#0a141b] px-3 text-sm font-bold normal-case tracking-normal text-white outline-none focus:border-[#6ee7d8]"
+                    >
+                      <option value="">Not mapped</option>
+                      {headers.map((header) => (
+                        <option key={`${field.key}-${header}`} value={header}>
+                          {header}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {warnings.length > 0 ? (
+            <div className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/10 p-4">
+              <p className="text-sm font-black text-amber-100">Warnings</p>
+              <ul className="mt-2 space-y-1 text-sm font-semibold leading-6 text-amber-100/90">
+                {warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            </div>
           ) : null}
 
           {errors.length > 0 ? (
@@ -1371,13 +1740,14 @@ function ImportPortfolioModal({
           <div className="mt-5 overflow-hidden rounded-xl border border-white/10">
             <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.04] px-4 py-3">
               <h3 className="text-sm font-black">Preview</h3>
-              <span className="text-xs font-bold text-[#8fa1b3]">{rows.length} valid rows</span>
+              <span className="text-xs font-bold text-[#8fa1b3]">{rows.length} mapped rows</span>
             </div>
             {rows.length > 0 ? (
               <div className="max-h-72 overflow-auto">
-                <table className="min-w-[720px] w-full text-left text-sm">
+                <table className="min-w-[860px] w-full text-left text-sm">
                   <thead className="sticky top-0 bg-[#0a141b] text-xs uppercase text-[#8fa1b3]">
                     <tr>
+                      <th className="px-4 py-3">Row</th>
                       <th className="px-4 py-3">Ticker</th>
                       <th className="px-4 py-3">Company</th>
                       <th className="px-4 py-3">Shares</th>
@@ -1389,10 +1759,13 @@ function ImportPortfolioModal({
                   <tbody className="divide-y divide-white/10">
                     {rows.map((row) => (
                       <tr key={row.id} className="bg-white/[0.02]">
+                        <td className="px-4 py-3 font-semibold text-[#8fa1b3]">{row.sourceRow}</td>
                         <td className="px-4 py-3 font-black text-[#6ee7d8]">{row.ticker}</td>
                         <td className="px-4 py-3 font-semibold">{row.companyName ?? row.ticker}</td>
                         <td className="px-4 py-3 font-semibold">{number.format(row.shares)}</td>
-                        <td className="px-4 py-3 font-semibold">{formatCurrency(row.averageBuyPrice)}</td>
+                        <td className={`px-4 py-3 font-semibold ${row.averageBuyPrice ? "" : "text-amber-100"}`}>
+                          {row.averageBuyPrice ? formatCurrency(row.averageBuyPrice) : "Needs mapping"}
+                        </td>
                         <td className="px-4 py-3 font-semibold text-[#8fa1b3]">{row.sector ?? "--"}</td>
                         <td className="px-4 py-3 font-semibold text-[#8fa1b3]">{row.targetPrice ? formatCurrency(row.targetPrice) : "--"}</td>
                       </tr>
