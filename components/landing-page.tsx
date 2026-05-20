@@ -55,6 +55,7 @@ export function LandingPage() {
         <nav className="hidden items-center gap-7 text-sm font-bold text-[#9fb0c2] md:flex">
           <a href="#features" className="transition hover:text-white">Features</a>
           <a href="#screenshots" className="transition hover:text-white">Product</a>
+          <a href="#action" className="transition hover:text-white">Video</a>
           <Link href="/pricing" className="transition hover:text-white">Pricing</Link>
           <a href="#faq" className="transition hover:text-white">FAQ</a>
         </nav>
@@ -114,6 +115,41 @@ export function LandingPage() {
           <ScreenshotTile icon={Brain} title="Premium research" detail="AI summaries, exports, and advanced analytics for Premium." />
           <ScreenshotTile icon={LockKeyhole} title="Smart gating" detail="Free, Starter, Pro, and Premium states are visible and responsive." />
           <ScreenshotTile icon={Download} title="Export-ready" detail="A roadmap-ready surface for reports and account workflows." />
+        </div>
+      </section>
+
+      <section id="action" className="mx-auto grid max-w-7xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-[0.88fr_1.12fr] lg:items-center lg:px-8">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#6ee7d8]">See Atlas Invest in action</p>
+          <h2 className="mt-4 max-w-2xl text-3xl font-semibold tracking-normal text-white sm:text-4xl lg:text-5xl">
+            Your portfolio workflow, ready for the home screen.
+          </h2>
+          <p className="mt-4 max-w-xl text-sm font-semibold leading-7 text-[#9fb0c2] sm:text-base">
+            Track stocks, import portfolios, and install Atlas Invest on your phone in minutes.
+          </p>
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <Link href="/install" className="premium-button inline-flex h-12 items-center justify-center gap-2 rounded-lg px-5 text-sm font-black">
+              Install Atlas Invest
+              <Download size={17} />
+            </Link>
+            <Link
+              href={dashboardHref}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-5 text-sm font-black text-white transition hover:border-[#6ee7d8]/50 hover:bg-white/[0.1]"
+            >
+              Open Dashboard
+              <ArrowRight size={17} />
+            </Link>
+          </div>
+        </div>
+        <div className="premium-card overflow-hidden p-2 shadow-[0_30px_120px_rgba(0,0,0,0.36)]">
+          <video
+            className="aspect-video w-full rounded-lg border border-white/10 bg-[#061015] object-cover"
+            src="/atlas-invest-launch.mp4"
+            poster="/atlas-invest-launch-frame.png"
+            controls
+            playsInline
+            preload="metadata"
+          />
         </div>
       </section>
 
